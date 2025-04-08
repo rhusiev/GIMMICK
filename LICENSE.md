@@ -1,6 +1,6 @@
 # The Tea-Ware License (Version 2.0)
 
-Copyright (c) 2024 Radomyr Husiev <h.radomyr@proton.me>
+Copyright (c) 2024 Radomyr Husiev <h.radomyr@proton.me>, rizerphe, Roman Zaletskyi
 
 Feel free to do whatever you want with this software, remembering to respect the terms of this license!
 
