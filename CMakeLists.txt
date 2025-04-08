@@ -27,6 +27,12 @@ include(cmake/CompilerWarnings.cmake)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 #! Project main executable source compilation
+add_library(simplex_noise STATIC
+    libraries/simplex_noise/SimplexNoise.cpp
+)
+target_include_directories(simplex_noise PUBLIC
+    libraries/simplex_noise
+)
 file(GLOB SOURCES
      "src/*.cpp"
 )
@@ -34,6 +40,8 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 
 #! Put path to your project headers
 target_include_directories(${PROJECT_NAME} PRIVATE include)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE simplex_noise)
 
 #! Add external packages
 # options_parser requires boost::program_options library
