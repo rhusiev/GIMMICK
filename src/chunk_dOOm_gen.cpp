@@ -8,9 +8,11 @@ Block::Block(BlockType type) : block_type(type) {}
 float Generator::generate_octave(float x, float z) {
     float total = 0;
     for (auto &[scale, weight_percent, offset] : perlin_scales_offsets) {
-        total +=
-            SimplexNoise::noise(x * scale + offset.x, z * scale + offset.z) *
-            weight_percent;
+        auto noise_0_1 =
+            (SimplexNoise::noise(x * scale + offset.x, z * scale + offset.z) +
+             1) /
+            2;
+        total += noise_0_1 * weight_percent;
     }
     return total / 100; // because weight in percent
 }
@@ -26,7 +28,7 @@ Chunk generate_chunk(int32_t x, int32_t z) {
     for (size_t i_x = 0; i_x < 16; i_x++) {
         for (size_t i_z = 0; i_z < 16; i_z++) {
             float height =
-                gen.generate_octave(chunk.x + i_x, chunk.z + i_z) * 128;
+                gen.generate_octave(chunk.x + i_x, chunk.z + i_z) * 384 - 128;
 #ifdef DEBUG_HEIGHTS
             chunk.debug_heights[i_x][i_z] = height;
 #endif
