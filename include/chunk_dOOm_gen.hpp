@@ -2,7 +2,6 @@
 #define INCLUDE_CHUNK_DOOM_GEN_HPP_
 
 #include <cstdint>
-#include <tuple>
 #include <vector>
 
 #define DEBUG_HEIGHTS
@@ -12,10 +11,14 @@ struct FloatCoord2 {
     float z;
 };
 
+// MUST BE SEQUENTIAL FOR NOW
+// (uniqueness computation)
 enum class BlockType : uint32_t {
     Air,
     Stone,
+    Grass,
 };
+constexpr uint32_t BLOCK_TYPE_COUNT = 3;
 
 class Block {
   public:
@@ -33,7 +36,7 @@ class Chunk {
   public:
     int32_t x;
     int32_t z;
-    ChunkSmol chunk_smols[16]; // TODO: change to private with methods?
+    ChunkSmol chunk_smols[24]; // TODO: change to private with methods?
 #ifdef DEBUG_HEIGHTS
     int32_t debug_heights[16][16];
 #endif

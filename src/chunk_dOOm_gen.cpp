@@ -31,13 +31,20 @@ Chunk generate_chunk(int32_t x, int32_t z) {
                 gen.generate_octave(chunk.x + i_x, chunk.z + i_z) * 384 - 128;
 #ifdef DEBUG_HEIGHTS
             chunk.debug_heights[i_x][i_z] = height;
+
 #endif
-            for (size_t i_ch = 0; i_ch < 16; i_ch++) {
+            for (size_t i_ch = 0; i_ch < 24; i_ch++) {
                 ChunkSmol &chunk_smol = chunk.chunk_smols[i_ch];
                 for (size_t i_y = 0; i_y < 16; i_y++) {
-                    if (height > i_y + i_ch * 16) {
-                        chunk_smol.blocks[i_x][i_y][i_z].block_type =
+                    if (height > i_y + i_ch * 16 + 1) {
+                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
                             BlockType::Stone;
+                    } else if (height > i_y + i_ch * 16) {
+                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
+                            BlockType::Grass;
+                    } else {
+                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
+                            BlockType::Air;
                     }
                 }
             }

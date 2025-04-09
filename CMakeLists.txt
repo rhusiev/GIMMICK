@@ -41,8 +41,6 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 #! Put path to your project headers
 target_include_directories(${PROJECT_NAME} PRIVATE include)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE simplex_noise)
-
 #! Add external packages
 # options_parser requires boost::program_options library
 # find_package(Boost 1.71.0 COMPONENTS program_options system REQUIRED)
@@ -51,7 +49,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE simplex_noise)
 
 # Add zlib dependency
 find_package(ZLIB REQUIRED)
-target_link_libraries(${PROJECT_NAME} ZLIB::ZLIB)
+target_link_libraries(${PROJECT_NAME} ZLIB::ZLIB simplex_noise)
 
 ##########################################################
 # Fixed CMakeLists.txt part
