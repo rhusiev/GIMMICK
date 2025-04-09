@@ -49,6 +49,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE simplex_noise)
 # target_include_directories(${PROJECT_NAME} PRIVATE ${Boost_INCLUDE_DIR})
 # target_link_libraries(${PROJECT_NAME} Boost::program_options Boost::system)
 
+# Add zlib dependency
+find_package(ZLIB REQUIRED)
+target_link_libraries(${PROJECT_NAME} ZLIB::ZLIB)
+
 ##########################################################
 # Fixed CMakeLists.txt part
 ##########################################################
