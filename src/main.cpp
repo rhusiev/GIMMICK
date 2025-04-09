@@ -35,9 +35,10 @@ int main() {
         std::cout << std::endl;
     }
 #endif
+    constexpr auto regions = 1;
 
-    for (auto x = -1; x < 1; x++) {
-        for (auto z = -1; z < 1; z++) {
+    for (auto x = -regions; x < regions; x++) {
+        for (auto z = -regions; z < regions; z++) {
             sample_write_chunk(x, z);
         }
     }

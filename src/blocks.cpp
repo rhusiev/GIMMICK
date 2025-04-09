@@ -17,6 +17,29 @@ void write_block_description(NBTSerializer *serializer, BlockType block_type) {
         serializer->writeString("false");
         serializer->writeTagEnd();
         break;
+    case BlockType::Water:
+        serializer->writeString("minecraft:water");
+        serializer->writeTagHeader("Properties", NBT_TagType::TAG_Compound);
+        serializer->writeTagHeader("level", NBT_TagType::TAG_Byte);
+        serializer->writeByte(0);
+        serializer->writeTagEnd();
+        break;
+    case BlockType::Sand:
+        serializer->writeString("minecraft:sand");
+        break;
+    case BlockType::Shortgrass:
+        serializer->writeString("minecraft:short_grass");
+        break;
+    case BlockType::Kelp:
+        serializer->writeString("minecraft:kelp");
+        serializer->writeTagHeader("Properties", NBT_TagType::TAG_Compound);
+        serializer->writeTagHeader("age", NBT_TagType::TAG_Int);
+        serializer->writeInt(25);
+        serializer->writeTagEnd();
+        break;
+    case BlockType::KelpPlant:
+        serializer->writeString("minecraft:kelp_plant");
+        break;
     default:
         break;
     }

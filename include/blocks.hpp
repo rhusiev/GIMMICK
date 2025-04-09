@@ -10,8 +10,13 @@ enum class BlockType : uint32_t {
     Air,
     Stone,
     Grass,
+    Water,
+    Sand,
+    Shortgrass,
+    Kelp,
+    KelpPlant,
 };
-constexpr uint32_t BLOCK_TYPE_COUNT = 3;
+constexpr uint32_t BLOCK_TYPE_COUNT = 8;
 
 void write_block_description(NBTSerializer *serializer, BlockType block_type);
 
