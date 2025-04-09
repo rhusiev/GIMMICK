@@ -1,6 +1,7 @@
 #ifndef INCLUDE_CHUNK_DOOM_GEN_HPP_
 #define INCLUDE_CHUNK_DOOM_GEN_HPP_
 
+#include "./blocks.hpp"
 #include <cstdint>
 #include <vector>
 
@@ -11,14 +12,7 @@ struct FloatCoord2 {
     float z;
 };
 
-// MUST BE SEQUENTIAL FOR NOW
-// (uniqueness computation)
-enum class BlockType : uint32_t {
-    Air,
-    Stone,
-    Grass,
-};
-constexpr uint32_t BLOCK_TYPE_COUNT = 3;
+// BlockType enum has been moved to blocks.hpp
 
 class Block {
   public:
