@@ -1,47 +1,31 @@
 #include "./anvil.hpp"
 #include "./chunk_dOOm_gen.hpp"
 #include "./chunk_encoding.hpp"
+#include <format>
 #include <fstream>
 #include <iostream>
 
-int sample_write_chunk() {
+void sample_write_chunk(int region_x, int region_z) {
     McAnvilWriter writer;
 
-    for (auto x = 0; x < 16; x++) {
-        for (auto z = 0; z < 16; z++) {
+    for (auto x = region_x * 32; x < region_x * 32 + 32; x++) {
+        for (auto z = region_z * 32; z < region_z * 32 + 32; z++) {
             Chunk chunk = generate_chunk(x * 16, z * 16);
             write_chunk(writer.getBufferFor(x, z), chunk);
         }
     }
-
-    {
-        std::ofstream file("output.b64", std::ios::binary);
-        auto base64 = writer.getBufferFor(0, 0)->asBase64();
-        file.write(base64.data(), base64.size());
-        file.close();
-    }
-
-    {
-        std::ofstream file("output.nbt", std::ios::binary);
-        file.write(static_cast<const char *>(static_cast<const void *>(
-                       writer.getBufferFor(0, 0)->getData())),
-                   writer.getBufferFor(0, 0)->getOffset());
-        file.close();
-    }
-
     std::vector<char> data = writer.serialize();
 
     {
-        std::ofstream file("output.dat", std::ios::binary);
+        std::ofstream file(std::format("r.{}.{}.mca", region_x, region_z),
+                           std::ios::binary);
         file.write(data.data(), data.size());
         file.close();
     }
-
-    return 0;
 }
 
 int main() {
-    Chunk chunk = generate_chunk(0, 0);
+    Chunk chunk = generate_chunk(-16, -16);
 
 #ifdef DEBUG_HEIGHTS
     for (size_t i_x = 0; i_x < 16; i_x++) {
@@ -52,7 +36,11 @@ int main() {
     }
 #endif
 
-    sample_write_chunk();
+    for (auto x = -1; x < 1; x++) {
+        for (auto z = -1; z < 1; z++) {
+            sample_write_chunk(x, z);
+        }
+    }
 
     return 0;
 }

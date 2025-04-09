@@ -1,9 +1,9 @@
 #include "./anvil.hpp"
 #include <zlib.h>
 
-OutputBuffer *McAnvilWriter::getBufferFor(int8_t x, int8_t z) {
-    unsigned int ux = static_cast<unsigned int>(x) % REGION_SIZE;
-    unsigned int uz = static_cast<unsigned int>(z) % REGION_SIZE;
+OutputBuffer *McAnvilWriter::getBufferFor(uint32_t x, uint32_t z) {
+    unsigned int ux = x % REGION_SIZE;
+    unsigned int uz = z % REGION_SIZE;
 
     if (chunkBuffers[uz][ux].has_value()) {
         return &chunkBuffers[uz][ux].value();

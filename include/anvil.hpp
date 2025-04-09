@@ -12,7 +12,7 @@ class McAnvilWriter {
     std::optional<OutputBuffer> chunkBuffers[REGION_SIZE][REGION_SIZE];
 
   public:
-    OutputBuffer *getBufferFor(int8_t x, int8_t z);
+    OutputBuffer *getBufferFor(uint32_t x, uint32_t z);
     std::vector<char> serialize() const;
 };
 
