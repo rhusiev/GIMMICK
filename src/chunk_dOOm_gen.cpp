@@ -1,6 +1,6 @@
 #include "./chunk_dOOm_gen.hpp"
 #include "./SimplexNoise.h"
-
+#include <iostream>
 Block::Block() : block_type(BlockType::Air) {}
 
 Block::Block(BlockType type) : block_type(type) {}
@@ -21,6 +21,34 @@ float Generator::generate_octave(float x, float z) {
     return total / 100; // because weight in percent
 }
 
+float Generator3D::generate_octave(float x, float y, float z, int n) {
+    float total = 0;
+    for (auto &[scale, weight_percent, offset] : perlin_scales_offsets[n]) {
+        auto noise_0_1 = (SimplexNoise::noise(x * scale*.7 + offset.x, y * scale + offset.y,
+                                               z * scale * .7+ offset.z) +
+                                              
+                          1) /
+                         2;
+        if (weight_percent == -1) {
+            total *= noise_0_1;
+        } else {
+            total += noise_0_1 * weight_percent;
+        }
+    }
+    return total / 100; // because weight in percent
+}
+
+bool Generator3D::generate_cave(float x, float y, float z) {
+    // float n1 = generate_octave(x, y, z, 0);
+    // float n2 = generate_octave(x, y, z, 1);
+    // float n3 = generate_octave(x, y, z, 2);
+    // n1 = compare(n1, 0.4, 0.055);
+    // n2 = compare(n2, 0.4, 0.055);
+    // n3 = (n3 < 0.17);
+
+    return (compare(generate_octave(x, y, z, 0),0.4,0.055)*compare(generate_octave(x, y, z, 1),0.4,0.055)+(generate_octave(x, y, z, 2) < 0.17));
+    // return (n1*n2)+n3;
+}
 Chunk::Chunk(int32_t x, int32_t z) : x(x), z(z) {}
 
 Chunk generate_chunk(int32_t x, int32_t z) {
@@ -36,6 +64,12 @@ Chunk generate_chunk(int32_t x, int32_t z) {
     PerlinParam grass_param1{0.1, 50, {0.1, 0.1}};
     PerlinParam grass_param2{1.0, 50, {0.1, 0.1}};
     Generator grass_gen{{grass_param1, grass_param2}};
+    //std::cout << "Generating chunk at " << x << ", " << z << std::endl;
+    PerlinParam3D cave_param1{0.01, 100, {200, 150, 30}};
+    PerlinParam3D cave_param2{0.02, 100, {-20000, -1555, 0.1}};
+    PerlinParam3D cave_param3{0.02, 90, {5, 0.6, 12}};
+    PerlinParam3D cave_param4{0.1, 10, {0.1, 0.1, 0.1}};
+    Generator3D cave_gen{{{cave_param1}, {cave_param2}, {cave_param3, cave_param4}}};
 
     for (int32_t i_x = 0; i_x < 16; i_x++) {
         for (int32_t i_z = 0; i_z < 16; i_z++) {
@@ -93,6 +127,20 @@ Chunk generate_chunk(int32_t x, int32_t z) {
                                 BlockType::Water;
                         }
                     } else {
+                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
+                            BlockType::Air;
+                    }
+                    // Cave generation
+                    if ((chunk_smol.blocks[i_y][i_z][15 - i_x].block_type ==
+                         BlockType::Water) ||
+                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type ==
+                            BlockType::Kelp) {
+                
+
+                    } else if (cave_gen.generate_cave(chunk.x + i_x,
+                                                       i_y + i_ch * 16,
+                                                       chunk.z + i_z)) {
+
                         chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
                             BlockType::Air;
                     }
