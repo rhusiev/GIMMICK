@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-#define DEBUG_HEIGHTS
+/*#define DEBUG_HEIGHTS*/
 
 struct FloatCoord2 {
     float x;
