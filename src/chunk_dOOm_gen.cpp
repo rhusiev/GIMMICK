@@ -1,146 +1,70 @@
 #include "./chunk_dOOm_gen.hpp"
 #include "./SimplexNoise.h"
-#include <iostream>
+#include <algorithm>
+
 Block::Block() : block_type(BlockType::Air) {}
 
 Block::Block(BlockType type) : block_type(type) {}
 
-float Generator::generate_octave(float x, float z) {
-    float total = 0;
-    for (auto &[scale, weight_percent, offset] : perlin_scales_offsets) {
-        auto noise_0_1 =
-            (SimplexNoise::noise(x * scale + offset.x, z * scale + offset.z) +
-             1) /
-            2;
-        if (weight_percent == -1) {
-            total *= noise_0_1;
-        } else {
-            total += noise_0_1 * weight_percent;
-        }
-    }
-    return total / 100; // because weight in percent
-}
-
-float Generator3D::generate_octave(float x, float y, float z, int n) {
-    float total = 0;
-    for (auto &[scale, weight_percent, offset] : perlin_scales_offsets[n]) {
-        auto noise_0_1 = (SimplexNoise::noise(x * scale*.7 + offset.x, y * scale + offset.y,
-                                               z * scale * .7+ offset.z) +
-                                              
-                          1) /
-                         2;
-        if (weight_percent == -1) {
-            total *= noise_0_1;
-        } else {
-            total += noise_0_1 * weight_percent;
-        }
-    }
-    return total / 100; // because weight in percent
-}
-
-bool Generator3D::generate_cave(float x, float y, float z) {
-    // float n1 = generate_octave(x, y, z, 0);
-    // float n2 = generate_octave(x, y, z, 1);
-    // float n3 = generate_octave(x, y, z, 2);
-    // n1 = compare(n1, 0.4, 0.055);
-    // n2 = compare(n2, 0.4, 0.055);
-    // n3 = (n3 < 0.17);
-
-    return (compare(generate_octave(x, y, z, 0),0.4,0.055)*compare(generate_octave(x, y, z, 1),0.4,0.055)+(generate_octave(x, y, z, 2) < 0.17));
-    // return (n1*n2)+n3;
-}
 Chunk::Chunk(int32_t x, int32_t z) : x(x), z(z) {}
 
-Chunk generate_chunk(int32_t x, int32_t z) {
+Chunk ChunkGenerator::generate(int32_t x, int32_t z) {
     Chunk chunk{x, z};
-    PerlinParam param1{0.001, -1, {0.1, 0.1}};
-    PerlinParam param2{0.005, 400, {0.5, 0.5}};
-    PerlinParam param3{0.04, 50, {0.7, 0.7}};
-    PerlinParam param4{0.001, -1, {0.1, 0.1}};
-    PerlinParam param5{0.001, -50, {0.1, 0.1}};
-    PerlinParam param6{0.0005, -15, {0.6, 0.3}};
-    Generator gen{{param3, param1, param2, param4, param5, param6}};
 
-    PerlinParam grass_param1{0.1, 50, {0.1, 0.1}};
-    PerlinParam grass_param2{1.0, 50, {0.1, 0.1}};
-    Generator grass_gen{{grass_param1, grass_param2}};
-    //std::cout << "Generating chunk at " << x << ", " << z << std::endl;
-    PerlinParam3D cave_param1{0.01, 100, {200, 150, 30}};
-    PerlinParam3D cave_param2{0.02, 100, {-20000, -1555, 0.1}};
-    PerlinParam3D cave_param3{0.02, 90, {5, 0.6, 12}};
-    PerlinParam3D cave_param4{0.1, 10, {0.1, 0.1, 0.1}};
-    Generator3D cave_gen{{{cave_param1}, {cave_param2}, {cave_param3, cave_param4}}};
-
+    // Pre-calculate heights for the entire chunk
+    float heights[16][16];
     for (int32_t i_x = 0; i_x < 16; i_x++) {
         for (int32_t i_z = 0; i_z < 16; i_z++) {
-            float height =
-                gen.generate_octave(chunk.x + i_x, chunk.z + i_z) * 32 + 64;
+            float height = getBaseTerrainHeight(chunk.x + i_x, chunk.z + i_z);
+            heights[i_x][i_z] = height;
 #ifdef DEBUG_HEIGHTS
             chunk.debug_heights[i_x][i_z] = height;
-
 #endif
-            for (int32_t i_ch = 0; i_ch < 24; i_ch++) {
-                ChunkSmol &chunk_smol = chunk.chunk_smols[i_ch];
-                bool generate_grass = grass_gen.generate_octave(
-                                          chunk.x + i_x, chunk.z + i_z) > 0.8;
+        }
+    }
 
-                for (int32_t i_y = 0; i_y < 16; i_y++) {
-                    if (height > i_y + i_ch * 16 + 1) {
+    // Pre-calculate vegetation flags to avoid redundant noise calculations
+    bool grass_flags[16][16];
+    bool kelp_flags[16][16];
+    for (int32_t i_x = 0; i_x < 16; i_x++) {
+        for (int32_t i_z = 0; i_z < 16; i_z++) {
+            grass_flags[i_x][i_z] =
+                shouldGenerateGrass(chunk.x + i_x, chunk.z + i_z);
+            kelp_flags[i_x][i_z] =
+                shouldGenerateKelp(chunk.x + i_x, chunk.z + i_z);
+        }
+    }
+
+    // Apply generation stages in sequence
+    generateBaseStructure(chunk, heights);
+    generateCaves(chunk, heights);
+    generateSurface(chunk, heights);
+    generateWater(chunk, heights);
+    generateVegetation(chunk, heights, grass_flags, kelp_flags);
+
+    return chunk;
+}
+
+void ChunkGenerator::generateBaseStructure(Chunk &chunk,
+                                           const float heights[16][16]) {
+    // Iterate through each sub-chunk (chunk_smol)
+    for (int32_t i_ch = 0; i_ch < 24; i_ch++) {
+        ChunkSmol &chunk_smol = chunk.chunk_smols[i_ch];
+
+        // For each y level in the sub-chunk (best memory locality)
+        for (int32_t i_y = 0; i_y < 16; i_y++) {
+            int32_t absolute_y = i_y + i_ch * 16;
+
+            // Then z coordinate
+            for (int32_t i_z = 0; i_z < 16; i_z++) {
+                // Then x coordinate
+                for (int32_t i_x = 0; i_x < 16; i_x++) {
+                    float height = heights[i_x][i_z];
+
+                    if (height > absolute_y + 1) {
                         chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
                             BlockType::Stone;
-                    } else if (height > i_y + i_ch * 16) {
-                        if (height > 65) {
-                            chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
-                                BlockType::Grass;
-                        } else {
-                            chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
-                                BlockType::Sand;
-                        }
-                    } else if (height > i_y + i_ch * 16 - 1 && height > 65 &&
-                               generate_grass) {
-                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
-                            BlockType::Shortgrass;
-                    } else if (i_y + i_ch * 16 < 65) {
-                        if (generate_grass) {
-                            int kelp_boundary = 64;
-                            if (height + 5 < kelp_boundary) {
-                                kelp_boundary = height + 5;
-                            }
-
-                            // Check if we're above the boundary
-                            if (i_y + i_ch * 16 > kelp_boundary) {
-                                chunk_smol.blocks[i_y][i_z][15 - i_x]
-                                    .block_type = BlockType::Water;
-                                continue;
-                            }
-
-                            // Check if we're at the boundary
-                            if (i_y + i_ch * 16 > kelp_boundary - 1) {
-                                chunk_smol.blocks[i_y][i_z][15 - i_x]
-                                    .block_type = BlockType::Kelp;
-                            } else {
-                                chunk_smol.blocks[i_y][i_z][15 - i_x]
-                                    .block_type = BlockType::KelpPlant;
-                            }
-                        } else {
-                            chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
-                                BlockType::Water;
-                        }
                     } else {
-                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
-                            BlockType::Air;
-                    }
-                    // Cave generation
-                    if ((chunk_smol.blocks[i_y][i_z][15 - i_x].block_type ==
-                         BlockType::Water) ||
-                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type ==
-                            BlockType::Kelp) {
-                
-
-                    } else if (cave_gen.generate_cave(chunk.x + i_x,
-                                                       i_y + i_ch * 16,
-                                                       chunk.z + i_z)) {
-
                         chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
                             BlockType::Air;
                     }
@@ -148,5 +72,226 @@ Chunk generate_chunk(int32_t x, int32_t z) {
             }
         }
     }
-    return chunk;
+}
+
+void ChunkGenerator::generateCaves(Chunk &chunk, const float heights[16][16]) {
+    // Iterate through each sub-chunk
+    for (int32_t i_ch = 0; i_ch < 24; i_ch++) {
+        ChunkSmol &chunk_smol = chunk.chunk_smols[i_ch];
+
+        // For each y level
+        for (int32_t i_y = 0; i_y < 16; i_y++) {
+            int32_t absolute_y = i_y + i_ch * 16;
+
+            // Then z coordinate
+            for (int32_t i_z = 0; i_z < 16; i_z++) {
+                // Then x coordinate
+                for (int32_t i_x = 0; i_x < 16; i_x++) {
+                    if (shouldGenerateCave(chunk.x + i_x, absolute_y,
+                                           chunk.z + i_z, heights)) {
+                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
+                            BlockType::Air;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void ChunkGenerator::generateSurface(Chunk &chunk,
+                                     const float heights[16][16]) {
+    const float MAYBE_SAND_LEVEL = 129.5;
+    const float SAND_LEVEL = 129;
+    const float GRAVEL_LEVEL = 124;
+
+    auto sand = SimplexNoise(0.01f);
+
+    for (int32_t i_z = 0; i_z < 16; i_z++) {
+        for (int32_t i_x = 0; i_x < 16; i_x++) {
+            float height = heights[i_x][i_z] - 1;
+
+            int32_t i_ch = static_cast<int32_t>(height) / 16;
+            ChunkSmol &chunk_smol = chunk.chunk_smols[i_ch];
+            int32_t relative_y = static_cast<int32_t>(height) % 16;
+
+            if (chunk_smol.blocks[relative_y][i_z][15 - i_x].block_type ==
+                BlockType::Stone) {
+                auto noise = sand.fractal(2, chunk.x + i_x, chunk.z + i_z);
+
+                if (height < GRAVEL_LEVEL) {
+                    chunk_smol.blocks[relative_y][i_z][15 - i_x].block_type =
+                        noise < 0.0 ? BlockType::Sand : BlockType::Gravel;
+                } else if (height < SAND_LEVEL) {
+                    chunk_smol.blocks[relative_y][i_z][15 - i_x].block_type =
+                        BlockType::Sand;
+                } else if (height < MAYBE_SAND_LEVEL && noise < 0.5) {
+                    chunk_smol.blocks[relative_y][i_z][15 - i_x].block_type =
+                        BlockType::Sand;
+                } else {
+                    chunk_smol.blocks[relative_y][i_z][15 - i_x].block_type =
+                        BlockType::Grass;
+                }
+            }
+        }
+    }
+}
+
+void ChunkGenerator::generateWater(Chunk &chunk, const float heights[16][16]) {
+    const int32_t WATER_LEVEL = 129;
+
+    // Iterate through each sub-chunk
+    for (int32_t i_ch = 0; i_ch < 24; i_ch++) {
+        if (i_ch * 16 > WATER_LEVEL) {
+            continue; // Skip sub-chunks above water level
+        }
+
+        ChunkSmol &chunk_smol = chunk.chunk_smols[i_ch];
+
+        // For each y level
+        for (int32_t i_y = 0; i_y < 16; i_y++) {
+            int32_t absolute_y = i_y + i_ch * 16;
+
+            // Skip if this entire y-layer is above water level
+            if (absolute_y > WATER_LEVEL) {
+                continue;
+            }
+
+            // Then z coordinate
+            for (int32_t i_z = 0; i_z < 16; i_z++) {
+                // Then x coordinate
+                for (int32_t i_x = 0; i_x < 16; i_x++) {
+                    float height = heights[i_x][i_z] - 1;
+
+                    if (height < absolute_y &&
+                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type ==
+                            BlockType::Air) {
+                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
+                            BlockType::Water;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void ChunkGenerator::generateVegetation(Chunk &chunk,
+                                        const float heights[16][16],
+                                        const bool grass_flags[16][16],
+                                        const bool kelp_flags[16][16]) {
+    // Iterate through each sub-chunk
+    for (int32_t i_ch = 0; i_ch < 24; i_ch++) {
+        ChunkSmol &chunk_smol = chunk.chunk_smols[i_ch];
+
+        // For each y level
+        for (int32_t i_y = 0; i_y < 16; i_y++) {
+            int32_t absolute_y = i_y + i_ch * 16;
+
+            // Then z coordinate
+            for (int32_t i_z = 0; i_z < 16; i_z++) {
+                // Then x coordinate
+                for (int32_t i_x = 0; i_x < 16; i_x++) {
+                    float height = heights[i_x][i_z];
+                    bool generate_grass = grass_flags[i_x][i_z];
+                    bool generate_kelp = kelp_flags[i_x][i_z];
+
+                    // Generate shortgrass on grass blocks
+                    if (chunk_smol.blocks[i_y][i_z][15 - i_x].block_type ==
+                            BlockType::Grass &&
+                        absolute_y < height && generate_grass) {
+
+                        // Place shortgrass one block above grass
+                        if (i_y + 1 < 16) {
+                            chunk_smol.blocks[i_y + 1][i_z][15 - i_x]
+                                .block_type = BlockType::Shortgrass;
+                        } else if (i_ch + 1 < 24) {
+                            chunk.chunk_smols[i_ch + 1]
+                                .blocks[0][i_z][15 - i_x]
+                                .block_type = BlockType::Shortgrass;
+                        }
+                    }
+
+                    // Generate kelp in water areas
+                    if (chunk_smol.blocks[i_y][i_z][15 - i_x].block_type ==
+                            BlockType::Water &&
+                        absolute_y < 129 && generate_kelp) {
+
+                        int kelp_boundary =
+                            std::min(128, static_cast<int>(height + 5));
+
+                        if (absolute_y > kelp_boundary - 1 &&
+                            absolute_y <= kelp_boundary) {
+                            chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
+                                BlockType::Kelp;
+                        } else if (absolute_y <= kelp_boundary - 1) {
+                            chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
+                                BlockType::KelpPlant;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+float ChunkGenerator::getBaseTerrainHeight(float x, float z) {
+    auto mountains = SimplexNoise(0.01f).fractal(3, x, z);
+    auto planes = SimplexNoise(0.001f).fractal(3, x, z);
+    auto biome_blending = SimplexNoise(0.0005).fractal(3, x, z) * 0.5 + 0.5;
+
+    auto mountains_height = (mountains + 1) * 32 + 64; // 64 - 128
+    auto planes_height = (planes + 1) * 16 + 48;       // 48 - 80
+
+    auto ocean_mask = SimplexNoise(0.00025).fractal(1, x, z) * 0.5 + 0.5;
+    auto ocean_height = SimplexNoise(0.001).fractal(2, x, z) * 16 + 48;
+
+    auto surface_height = biome_blending * planes_height +
+                          (1 - biome_blending) * mountains_height;
+
+    auto height = surface_height * (1 - ocean_mask) + ocean_height * ocean_mask;
+
+    return std::clamp(height + 64.0, 0.0, 320.0);
+}
+
+bool ChunkGenerator::shouldGenerateCave(float x, float y, float z,
+                                        const float heights[16][16]) {
+    float distance_to_surface =
+        heights[static_cast<uint32_t>(x) % 16][static_cast<uint32_t>(z) % 16] -
+        y;
+
+    if (distance_to_surface < 0) {
+        return false;
+    }
+
+    float noodle1 = SimplexNoise(0.01).fractal(2, x, y, z);
+    float noodle2 = SimplexNoise(0.02).fractal(2, x, y, z);
+
+    float cavern = SimplexNoise(0.01).fractal(3, x, y, z);
+
+    float noodle1_probability =
+        std::max(1.f - std::abs(noodle1 - 0.2f) * 10.0f, 0.f);
+    float noodle2_probability =
+        std::max(1.f - std::abs(noodle2 - 0.2f) * 10.0f, 0.f);
+
+    float cavern_probability = std::max(0.f, cavern - 0.6f);
+
+    float height_based_probability =
+        std::min(distance_to_surface * 0.125f + 0.25f, 1.f);
+
+    return (noodle1_probability * noodle2_probability + cavern_probability) *
+               height_based_probability >
+           0.1f;
+}
+
+bool ChunkGenerator::shouldGenerateGrass(float x, float z) {
+    return SimplexNoise(0.1).fractal(2, x, z) > 0.6f;
+}
+
+bool ChunkGenerator::shouldGenerateKelp(float x, float z) {
+    return SimplexNoise(0.1).fractal(2, x, z) > 0.5f;
+}
+
+// Legacy function that uses the new ChunkGenerator
+Chunk generate_chunk(int32_t x, int32_t z) {
+    static ChunkGenerator generator;
+    return generator.generate(x, z);
 }

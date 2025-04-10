@@ -1,10 +1,12 @@
 #ifndef INCLUDE_CHUNK_DOOM_GEN_HPP_
 #define INCLUDE_CHUNK_DOOM_GEN_HPP_
 
+#include "../libraries/simplex_noise/SimplexNoise.h"
 #include "./blocks.hpp"
-#include <cstdint>
-#include <vector>
 #include <cmath>
+#include <cstdint>
+#include <memory>
+#include <vector>
 
 #define DEBUG_HEIGHTS
 
@@ -44,34 +46,27 @@ class Chunk {
     Chunk(int32_t x, int32_t z);
 };
 
-struct PerlinParam {
-    float scale;
-    float weight_percent; // because better float ig
-    FloatCoord2 offset;
-};
+// New generation system that uses SimplexNoise directly
+class ChunkGenerator {
+  public:
+    Chunk generate(int32_t x, int32_t z);
 
-struct PerlinParam3D {
-    float scale;
-    float weight_percent; // because better float ig
-    FloatCoord3 offset;
-};
-class Generator {
-  public: // TODO: change to private with methods?
-    std::vector<PerlinParam> perlin_scales_offsets;
+    // Individual generation stages
+    void generateBaseStructure(Chunk &chunk, const float heights[16][16]);
+    void generateCaves(Chunk &chunk, const float heights[16][16]);
+    void generateSurface(Chunk &chunk, const float heights[16][16]);
+    void generateWater(Chunk &chunk, const float heights[16][16]);
+    void generateVegetation(Chunk &chunk, const float heights[16][16],
+                            const bool grass_flags[16][16],
+                            const bool kelp_flags[16][16]);
 
-    float generate_octave(float x, float z);
+    // Density/noise functions
+    float getBaseTerrainHeight(float x, float z);
+    bool shouldGenerateCave(float x, float y, float z,
+                            const float heights[16][16]);
+    bool shouldGenerateGrass(float x, float z);
+    bool shouldGenerateKelp(float x, float z);
 };
-
-class Generator3D {
-  public: 
-    std::vector<std::vector<PerlinParam3D>> perlin_scales_offsets;
-    float generate_octave(float x, float y, float z,int n);
-    bool generate_cave(float x, float y, float z);
-    bool compare(float a, float b, float epsilon) {
-        return (std::fabs(a - b) < epsilon);
-    };
-};
-
 
 Chunk generate_chunk(int32_t x, int32_t z);
 

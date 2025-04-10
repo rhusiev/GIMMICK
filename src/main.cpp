@@ -4,16 +4,27 @@
 #include <format>
 #include <fstream>
 #include <iostream>
+#include <thread>
 
 void sample_write_chunk(int region_x, int region_z) {
     McAnvilWriter writer;
 
+    std::vector<std::thread> threads;
     for (auto x = region_x * 32; x < region_x * 32 + 32; x++) {
         for (auto z = region_z * 32; z < region_z * 32 + 32; z++) {
-            Chunk chunk = generate_chunk(x * 16, z * 16);
-            write_chunk(writer.getBufferFor(x, z), chunk);
+            auto buffer = writer.getBufferFor(x, z);
+            threads.emplace_back(
+                [](OutputBuffer *buffer, int x, int z) {
+                    Chunk chunk = generate_chunk(x * 16, z * 16);
+                    write_chunk(buffer, chunk);
+                },
+                buffer, x, z);
         }
     }
+    for (auto &thread : threads) {
+        thread.join();
+    }
+
     std::vector<char> data = writer.serialize();
 
     {

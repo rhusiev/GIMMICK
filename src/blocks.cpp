@@ -27,6 +27,9 @@ void write_block_description(NBTSerializer *serializer, BlockType block_type) {
     case BlockType::Sand:
         serializer->writeString("minecraft:sand");
         break;
+    case BlockType::Gravel:
+        serializer->writeString("minecraft:gravel");
+        break;
     case BlockType::Shortgrass:
         serializer->writeString("minecraft:short_grass");
         break;
