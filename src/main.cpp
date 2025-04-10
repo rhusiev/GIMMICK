@@ -9,8 +9,8 @@
 void sample_write_chunk(int region_x, int region_z) {
     McAnvilWriter writer;
 
-    std::vector<std::thread> threads;
     for (auto x = region_x * 32; x < region_x * 32 + 32; x++) {
+        std::vector<std::thread> threads;
         for (auto z = region_z * 32; z < region_z * 32 + 32; z++) {
             auto buffer = writer.getBufferFor(x, z);
             threads.emplace_back(
@@ -20,9 +20,9 @@ void sample_write_chunk(int region_x, int region_z) {
                 },
                 buffer, x, z);
         }
-    }
-    for (auto &thread : threads) {
-        thread.join();
+        for (auto &thread : threads) {
+            thread.join();
+        }
     }
 
     std::vector<char> data = writer.serialize();

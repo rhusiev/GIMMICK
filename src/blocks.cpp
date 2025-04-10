@@ -97,6 +97,22 @@ void write_block_description(NBTSerializer *serializer, BlockType block_type) {
     case BlockType::Deepslate_DiamondOre:
         serializer->writeString("minecraft:deepslate_diamond_ore");
         break;
+    case BlockType::OakLog:
+        serializer->writeString("minecraft:oak_log");
+        serializer->writeTagHeader("Properties", NBT_TagType::TAG_Compound);
+        serializer->writeTagHeader("axis", NBT_TagType::TAG_String);
+        serializer->writeString("y");
+        serializer->writeTagEnd();
+        break;
+    case BlockType::OakLeaves:
+        serializer->writeString("minecraft:oak_leaves");
+        serializer->writeTagHeader("Properties", NBT_TagType::TAG_Compound);
+        serializer->writeTagHeader("persistent", NBT_TagType::TAG_String);
+        serializer->writeString("false");
+        serializer->writeTagHeader("distance", NBT_TagType::TAG_String);
+        serializer->writeString("3");
+        serializer->writeTagEnd();
+        break;
     default:
         break;
     }

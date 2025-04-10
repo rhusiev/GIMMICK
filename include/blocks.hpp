@@ -36,8 +36,11 @@ enum class BlockType : uint32_t {
     Deepslate_RedstoneOre,
     Deepslate_EmeraldOre,
     Deepslate_DiamondOre,
+    
+    OakLog,
+    OakLeaves,
 };
-constexpr uint32_t BLOCK_TYPE_COUNT = 27;
+constexpr uint32_t BLOCK_TYPE_COUNT = 29;
 
 void write_block_description(NBTSerializer *serializer, BlockType block_type);
 

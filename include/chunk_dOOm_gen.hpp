@@ -56,6 +56,7 @@ class ChunkGenerator {
     void generateCaves(Chunk &chunk, const float heights[16][16]);
     void generateSurface(Chunk &chunk, const float heights[16][16]);
     void generateWater(Chunk &chunk, const float heights[16][16]);
+    void generateTrees(Chunk &chunk, const float heights[16][16]);
     void generateVegetation(Chunk &chunk, const float heights[16][16],
                             const bool grass_flags[16][16],
                             const bool kelp_flags[16][16]);
@@ -66,6 +67,12 @@ class ChunkGenerator {
                             const float heights[16][16]);
     bool shouldGenerateGrass(float x, float z);
     bool shouldGenerateKelp(float x, float z);
+    bool shouldGenerateForest(float x, float z);
+    
+    // Helper for tree generation
+    bool canPlaceTree(Chunk &chunk, int32_t x, int32_t z, int32_t height, const float heights[16][16]);
+    void placeTree(Chunk &chunk, int32_t x, int32_t z, int32_t height);
+    void setBlockInChunk(Chunk &chunk, int32_t x, int32_t y, int32_t z, BlockType block_type);
 };
 
 Chunk generate_chunk(int32_t x, int32_t z);

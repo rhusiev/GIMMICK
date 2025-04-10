@@ -1,7 +1,7 @@
 #include "./chunk_dOOm_gen.hpp"
 #include "./SimplexNoise.h"
 #include <algorithm>
-#include <iostream>
+#include <cstdlib>
 
 Block::Block() : block_type(BlockType::Air) {}
 
@@ -41,6 +41,7 @@ Chunk ChunkGenerator::generate(int32_t x, int32_t z) {
     generateCaves(chunk, heights);
     generateSurface(chunk, heights);
     generateWater(chunk, heights);
+    generateTrees(chunk, heights);
     generateVegetation(chunk, heights, grass_flags, kelp_flags);
 
     return chunk;
@@ -302,9 +303,18 @@ void ChunkGenerator::generateVegetation(Chunk &chunk,
 
                         // Place shortgrass one block above grass
                         if (i_y + 1 < 16) {
+                            if (chunk_smol.blocks[i_y + 1][i_z][15 - i_x]
+                                    .block_type != BlockType::Air) {
+                                continue; // Skip if not air
+                            }
                             chunk_smol.blocks[i_y + 1][i_z][15 - i_x]
                                 .block_type = BlockType::Shortgrass;
                         } else if (i_ch + 1 < 24) {
+                            if (chunk.chunk_smols[i_ch + 1]
+                                    .blocks[0][i_z][15 - i_x]
+                                    .block_type != BlockType::Air) {
+                                continue; // Skip if not air
+                            }
                             chunk.chunk_smols[i_ch + 1]
                                 .blocks[0][i_z][15 - i_x]
                                 .block_type = BlockType::Shortgrass;
@@ -332,6 +342,176 @@ void ChunkGenerator::generateVegetation(Chunk &chunk,
             }
         }
     }
+}
+
+void ChunkGenerator::generateTrees(Chunk &chunk, const float heights[16][16]) {
+    // Check forestness of this chunk
+    float forestness = 0.0f;
+
+    // Use a slightly higher frequency than biome blending (0.0005)
+    auto forest_noise = SimplexNoise(0.0006f);
+
+    // Sample at chunk center for better continuity
+    float center_x = chunk.x + 8.0f;
+    float center_z = chunk.z + 8.0f;
+
+    // Calculate forestness value between 0 and 1
+    forestness = forest_noise.fractal(3, center_x, center_z) * 0.5f + 0.5f;
+
+    // Determine number of trees to generate (0-4 based on forestness)
+    int max_trees = 4;
+    int num_trees = static_cast<int>(forestness * (max_trees + 1));
+
+    // Generate each tree
+    for (int i = 0; i < num_trees; i++) {
+        // Generate random position in chunk (away from borders)
+        int32_t tree_x = 3 + (rand() % 10); // 3-12
+        int32_t tree_z = 3 + (rand() % 10); // 3-12
+
+        // Get height at this position
+        int32_t height = static_cast<int32_t>(heights[tree_x][tree_z]);
+
+        // Check if we can place a tree here
+        if (canPlaceTree(chunk, tree_x, tree_z, height, heights)) {
+            placeTree(chunk, tree_x, tree_z, height);
+        }
+    }
+}
+
+bool ChunkGenerator::canPlaceTree(Chunk &chunk, int32_t x, int32_t z,
+                                  int32_t height, const float heights[16][16]) {
+    // Check if there's grass below
+    int32_t ground_y = height - 1;
+    int32_t i_ch = ground_y / 16;
+    int32_t relative_y = ground_y % 16;
+
+    // Skip if out of bounds
+    if (i_ch < 0 || i_ch >= 24)
+        return false;
+
+    // Check if there's grass block below
+    if (chunk.chunk_smols[i_ch].blocks[relative_y][z][15 - x].block_type !=
+        BlockType::Grass) {
+        return false;
+    }
+
+    // Check if there's enough space above (6 blocks for a small tree)
+    for (int y_offset = 0; y_offset < 6; y_offset++) {
+        int32_t check_y = height + y_offset;
+
+        // Check a 3x3 area around the tree trunk for each level
+        for (int check_z = z - 1; check_z <= z + 1; check_z++) {
+            for (int check_x = x - 1; check_x <= x + 1; check_x++) {
+                // Skip if coordinates are outside chunk
+                if (check_x < 0 || check_x >= 16 || check_z < 0 ||
+                    check_z >= 16) {
+                    continue;
+                }
+
+                // Calculate the proper subchunk and relative coordinates
+                int32_t check_ch = check_y / 16;
+                int32_t rel_y = check_y % 16;
+
+                // Make sure we don't exceed chunk boundary
+                if (check_ch < 0 || check_ch >= 24) {
+                    return false;
+                }
+
+                // Make sure the space is air
+                if (chunk.chunk_smols[check_ch]
+                        .blocks[rel_y][check_z][15 - check_x]
+                        .block_type != BlockType::Air) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+void ChunkGenerator::placeTree(Chunk &chunk, int32_t x, int32_t z,
+                               int32_t height) {
+    // Tree structure - a simple oak tree with a 1-block trunk and leaves around
+
+    // Height of the tree (4-6 blocks)
+    int tree_height = 4 + (rand() % 3);
+
+    // Place trunk
+    for (int y_offset = 0; y_offset < tree_height; y_offset++) {
+        int32_t y = height + y_offset;
+        // Place log at the trunk position using the helper method
+        setBlockInChunk(chunk, x, y, z, BlockType::OakLog);
+    }
+
+    // Place leaves (in a 5x5x3 pattern around the top of the tree)
+    for (int y_offset = tree_height - 3; y_offset < tree_height + 1;
+         y_offset++) {
+        int32_t y = height + y_offset;
+
+        // Size of the leaf layer depends on the height
+        int leaf_radius = (y_offset == tree_height)       ? 0
+                          : (y_offset == tree_height - 1) ? 1
+                                                          : 2;
+
+        for (int leaf_z = z - leaf_radius; leaf_z <= z + leaf_radius;
+             leaf_z++) {
+            for (int leaf_x = x - leaf_radius; leaf_x <= x + leaf_radius;
+                 leaf_x++) {
+                // Skip if coordinates are outside chunk
+                if (leaf_x < 0 || leaf_x >= 16 || leaf_z < 0 || leaf_z >= 16) {
+                    continue;
+                }
+
+                // For the outer corners, add some randomness
+                if (leaf_radius == 2 &&
+                    (std::abs(leaf_x - x) == 2 && std::abs(leaf_z - z) == 2) &&
+                    (rand() % 2 == 0)) {
+                    continue;
+                }
+
+                // Don't place leaves at the trunk
+                if (leaf_x == x && leaf_z == z && y_offset < tree_height) {
+                    continue;
+                }
+
+                // Place leaves - safely handling subchunk boundaries
+                setBlockInChunk(chunk, leaf_x, y, leaf_z, BlockType::OakLeaves);
+            }
+        }
+    }
+}
+
+// Helper method to safely set blocks across subchunk boundaries
+void ChunkGenerator::setBlockInChunk(Chunk &chunk, int32_t x, int32_t y,
+                                     int32_t z, BlockType block_type) {
+    // Ensure we're within the world height bounds
+    if (y < 0 || y >= 24 * 16)
+        return;
+
+    // Calculate subchunk and relative coordinates
+    int32_t i_ch = y / 16;
+    int32_t relative_y = y % 16;
+
+    // Skip if out of valid subchunk range
+    if (i_ch < 0 || i_ch >= 24)
+        return;
+
+    // Skip if outside chunk boundaries in x/z
+    if (x < 0 || x >= 16 || z < 0 || z >= 16)
+        return;
+
+    // Set the block
+    chunk.chunk_smols[i_ch].blocks[relative_y][z][15 - x].block_type =
+        block_type;
+}
+
+bool ChunkGenerator::shouldGenerateForest(float x, float z) {
+    // Use noise at slightly higher frequency than biome blending
+    auto forest = SimplexNoise(0.0006f).fractal(3, x, z) * 0.5f + 0.5f;
+
+    // Return true if the noise is above a threshold
+    return forest > 0.7f;
 }
 
 float ChunkGenerator::getBaseTerrainHeight(float x, float z) {
