@@ -1,6 +1,7 @@
 #include "./chunk_dOOm_gen.hpp"
 #include "./SimplexNoise.h"
 #include <algorithm>
+#include <iostream>
 
 Block::Block() : block_type(BlockType::Air) {}
 
@@ -47,6 +48,21 @@ Chunk ChunkGenerator::generate(int32_t x, int32_t z) {
 
 void ChunkGenerator::generateBaseStructure(Chunk &chunk,
                                            const float heights[16][16]) {
+    auto tiny = SimplexNoise(1.0f);
+
+    float bedrock_heights[16][16];
+    float deepslate_heights[16][16];
+
+    for (int32_t x = 0; x < 16; x++) {
+        for (int32_t z = 0; z < 16; z++) {
+            auto noise = tiny.fractal(1, chunk.x + x, chunk.z + z);
+            bedrock_heights[x][z] = 2.0f + noise;
+            deepslate_heights[x][z] = 32.0f + noise * 2.0f;
+        }
+    }
+
+    auto ore_noise = SimplexNoise(0.1f);
+
     // Iterate through each sub-chunk (chunk_smol)
     for (int32_t i_ch = 0; i_ch < 24; i_ch++) {
         ChunkSmol &chunk_smol = chunk.chunk_smols[i_ch];
@@ -61,9 +77,94 @@ void ChunkGenerator::generateBaseStructure(Chunk &chunk,
                 for (int32_t i_x = 0; i_x < 16; i_x++) {
                     float height = heights[i_x][i_z];
 
-                    if (height > absolute_y + 1) {
+                    float depth = (height - absolute_y);
+                    float depth_probability_scaling =
+                        std::min(depth * 0.125f, 1.f);
+
+                    float x = chunk.x + i_x;
+                    float z = chunk.z + i_z;
+
+                    auto is_coal =
+                        ore_noise.fractal(2, x, absolute_y, z) * 0.5 + 0.5 <
+                        0.11 * depth_probability_scaling;
+                    auto is_iron =
+                        ore_noise.fractal(2, x, absolute_y + 320, z) * 0.5 +
+                            0.5 <
+                        0.11 * depth_probability_scaling;
+                    auto is_copper =
+                        ore_noise.fractal(2, x, absolute_y + 320 * 2, z) * 0.5 +
+                            0.5 <
+                        0.05 * depth_probability_scaling;
+                    auto is_gold =
+                        ore_noise.fractal(2, x, absolute_y + 320 * 3, z) * 0.5 +
+                            0.5 <
+                        0.1 * depth_probability_scaling;
+                    auto is_lapis =
+                        ore_noise.fractal(2, x, absolute_y + 320 * 4, z) * 0.5 +
+                            0.5 <
+                        0.025 * depth_probability_scaling;
+                    auto is_redstone =
+                        ore_noise.fractal(2, x, absolute_y + 320 * 5, z) * 0.5 +
+                            0.5 <
+                        0.05 * depth_probability_scaling;
+                    auto is_emerald =
+                        ore_noise.fractal(2, x, absolute_y + 320 * 6, z) * 0.5 +
+                            0.5 <
+                        0.025 * depth_probability_scaling;
+                    auto is_diamond =
+                        ore_noise.fractal(2, x, absolute_y + 320 * 7, z) * 0.5 +
+                            0.5 <
+                        0.025 * depth_probability_scaling;
+
+                    if (absolute_y < bedrock_heights[i_x][i_z]) {
                         chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
-                            BlockType::Stone;
+                            BlockType::Bedrock;
+                    } else if (absolute_y < deepslate_heights[i_x][i_z]) {
+                        auto block = BlockType::Deepslate;
+
+                        if (is_coal) {
+                            block = BlockType::Deepslate_CoalOre;
+                        } else if (is_iron) {
+                            block = BlockType::Deepslate_IronOre;
+                        } else if (is_copper) {
+                            block = BlockType::Deepslate_CopperOre;
+                        } else if (is_gold) {
+                            block = BlockType::Deepslate_GoldOre;
+                        } else if (is_lapis) {
+                            block = BlockType::Deepslate_LapisOre;
+                        } else if (is_redstone) {
+                            block = BlockType::Deepslate_RedstoneOre;
+                        } else if (is_emerald) {
+                            block = BlockType::Deepslate_EmeraldOre;
+                        } else if (is_diamond) {
+                            block = BlockType::Deepslate_DiamondOre;
+                        }
+
+                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
+                            block;
+                    } else if (height > absolute_y + 1) {
+                        auto block = BlockType::Stone;
+
+                        if (is_coal) {
+                            block = BlockType::Stone_CoalOre;
+                        } else if (is_iron) {
+                            block = BlockType::Stone_IronOre;
+                        } else if (is_copper) {
+                            block = BlockType::Stone_CopperOre;
+                        } else if (is_gold) {
+                            block = BlockType::Stone_GoldOre;
+                        } else if (is_lapis) {
+                            block = BlockType::Stone_LapisOre;
+                        } else if (is_redstone) {
+                            block = BlockType::Stone_RedstoneOre;
+                        } else if (is_emerald) {
+                            block = BlockType::Stone_EmeraldOre;
+                        } else if (is_diamond) {
+                            block = BlockType::Stone_DiamondOre;
+                        }
+
+                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
+                            block;
                     } else {
                         chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
                             BlockType::Air;
@@ -275,7 +376,8 @@ bool ChunkGenerator::shouldGenerateCave(float x, float y, float z,
     float cavern_probability = std::max(0.f, cavern - 0.6f);
 
     float height_based_probability =
-        std::min(distance_to_surface * 0.125f + 0.25f, 1.f);
+        std::min(distance_to_surface * 0.0625f + 0.125f, 1.f) *
+        std::max(std::min((y - 4.f) * 0.125f, 1.f), 0.f);
 
     return (noodle1_probability * noodle2_probability + cavern_probability) *
                height_based_probability >
