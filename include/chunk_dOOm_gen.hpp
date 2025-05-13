@@ -119,13 +119,4 @@ class Chunk {
     Chunk(int32_t x, int32_t z);
 };
 
-// Simplified generation system that only creates stone terrain
-class ChunkGenerator {
-  public:
-    Chunk *generate_all(int32_t region_x, int32_t region_z);
-
-    // Density/noise function
-    __device__ static float getBaseTerrainHeight(float x, float z);
-};
-
 #endif // INCLUDE_CHUNK_DOOM_GEN_HPP_

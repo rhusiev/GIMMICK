@@ -57,6 +57,7 @@ class McAnvilWriter {
 
   public:
     OutputBuffer *getBufferFor(uint32_t x, uint32_t z);
+    std::vector<OutputBuffer *> allBuffers();
     std::vector<char> serialize();
 };
 

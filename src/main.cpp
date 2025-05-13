@@ -1,6 +1,7 @@
 #include "./anvil.hpp"
 #include "./chunk_dOOm_gen.hpp"
 #include "./chunk_encoding.hpp"
+#include "./generator.hpp"
 #include <cuda_runtime.h>
 #include <format>
 #include <fstream>
@@ -9,25 +10,12 @@
 #include <thrust/device_vector.h>
 
 void sample_write_chunk(int region_x, int region_z) {
+    ChunkGenerator generator;
+
     McAnvilWriter writer;
+    auto buffers = writer.allBuffers();
 
-    std::vector<OutputBuffer *> buffers;
-    std::vector<Chunk> chunks;
-
-    for (auto x = region_x * 32; x < region_x * 32 + 32; x++) {
-        for (auto z = region_z * 32; z < region_z * 32 + 32; z++) {
-            auto buffer = writer.getBufferFor(x, z);
-            buffers.push_back(buffer);
-        }
-    }
-
-    static ChunkGenerator generator;
-    auto chunk_array = generator.generate_all(region_x, region_z);
-
-    // Convert the array to a vector for easier handling
-    for (int i = 0; i < buffers.size(); i++) {
-        chunks.push_back(std::move(chunk_array[i]));
-    }
+    auto chunks = generator.generate_all(region_x, region_z);
 
     cudaDeviceSynchronize();
 

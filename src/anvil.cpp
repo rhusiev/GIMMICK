@@ -1,4 +1,6 @@
 #include "./anvil.hpp"
+#include "buffer.hpp"
+#include <vector>
 #include <zlib.h>
 
 OutputBuffer *McAnvilWriter::getBufferFor(uint32_t x, uint32_t z) {
@@ -11,6 +13,17 @@ OutputBuffer *McAnvilWriter::getBufferFor(uint32_t x, uint32_t z) {
         chunkBuffers[uz][ux].emplace(1024 * 1024);
         return chunkBuffers[uz][ux].value().getOutputBuffer();
     }
+}
+
+std::vector<OutputBuffer *> McAnvilWriter::allBuffers() {
+    std::vector<OutputBuffer *> buffers;
+
+    for (auto x = 0; x < 32; x++) {
+        for (auto z = 0; z < 32; z++) {
+            buffers.push_back(getBufferFor(x, z));
+        }
+    }
+    return buffers;
 }
 
 std::vector<char> McAnvilWriter::serialize() {
