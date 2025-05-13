@@ -60,15 +60,14 @@ Chunk ChunkGenerator::generate(int32_t x, int32_t z) {
 __device__ void generateSmolChunk(ChunkSmol *chunk_smol, int32_t i_ch,
                                   const float *heights) {
     // Process all 4096 blocks in this subchunk
-    for (uint32_t i_y = 0; i_y < 16; i_y++) {
-        for (uint32_t i_z = 0; i_z < 16; i_z++) {
-            for (uint32_t i_x = 0; i_x < 16; i_x++) {
+    for (uint32_t i_z = 0; i_z < 16; i_z++) {
+        for (uint32_t i_x = 0; i_x < 16; i_x++) {
+            // Get height value from device vector
+            float height = heights[i_z * 16 + i_x];
+            for (uint32_t i_y = 0; i_y < 16; i_y++) {
 
                 // Calculate absolute Y coordinate in the world
                 int32_t absolute_y = i_y + i_ch * 16;
-
-                // Get height value from device vector
-                float height = heights[i_z * 16 + i_x];
 
                 // Set the appropriate block based on height
                 if (height > absolute_y) {

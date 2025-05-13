@@ -37,7 +37,7 @@ class BlockString {
 
 class BlockRegistry {
   private:
-    static constexpr size_t MAX_SERIALIZED_LENGTH = 256;
+    static constexpr size_t MAX_SERIALIZED_LENGTH = 32;
     static constexpr size_t MAX_BLOCKS = 16; // TODO change
     BlockString serialized_blocks[MAX_BLOCKS];
     uint8_t raw_output[MAX_SERIALIZED_LENGTH];

@@ -5,6 +5,7 @@
 #include <format>
 #include <fstream>
 #include <iostream>
+#include <thread>
 
 void sample_write_chunk(int region_x, int region_z) {
     McAnvilWriter writer;
