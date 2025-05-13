@@ -3,31 +3,17 @@
 #include "./nbt.hpp"
 
 void encode_subchunk(ChunkSmol &chunk, NBTSerializer *serializer) {
-    uint32_t unique_blocks[BLOCK_TYPE_COUNT] = {0};
+    const BlockRegistry& registry = chunk.getRegistry();
+    size_t n_blocks = registry.getBlockCount();
 
-    for (auto y = 0; y < 16; y++) {
-        for (auto z = 0; z < 16; z++) {
-            for (auto x = 0; x < 16; x++) {
-                auto block = chunk.blocks[y][z][x];
-                unique_blocks[static_cast<uint32_t>(block.block_type)]++;
-            }
-        }
+    if (n_blocks == 0) {
+        return;
     }
 
-    auto n_blocks = 0;
-    for (uint32_t i = 0; i < BLOCK_TYPE_COUNT; i++) {
-        if (unique_blocks[i] > 0) {
-            n_blocks++;
-        }
-    };
-
-    serializer->writeListTagHeader("palette", NBT_TagType::TAG_Compound,
-                                   n_blocks);
-    for (uint32_t i = 0; i < BLOCK_TYPE_COUNT; i++) {
-        if (unique_blocks[i] > 0) {
-            // Use the block description serialization function
-            write_block_description(serializer, static_cast<BlockType>(i));
-        }
+    serializer->writeListTagHeader("palette", NBT_TagType::TAG_Compound, n_blocks);
+    for (uint32_t i = 0; i < n_blocks; i++) {
+        const Block& block = registry.getBlock(i);
+        write_block_description(serializer, block.block_type);
     }
 
     if (n_blocks < 2) {
@@ -57,13 +43,7 @@ void encode_subchunk(ChunkSmol &chunk, NBTSerializer *serializer) {
             auto z = (block % 256) / 16;
             auto x = block % 16;
 
-            auto block_type = chunk.blocks[y][z][x].block_type;
-            uint64_t block_id = 0;
-            for (uint32_t i = 0; i < static_cast<uint32_t>(block_type); i++) {
-                if (unique_blocks[i] > 0) {
-                    block_id++;
-                }
-            }
+            uint64_t block_id = chunk.getBlockId(y, z, x);
 
             auto shift = 64 - ((block - first_block) * n_bits) - n_bits;
             item |= block_id << shift;

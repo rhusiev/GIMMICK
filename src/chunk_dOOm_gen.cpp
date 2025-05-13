@@ -7,6 +7,62 @@ Block::Block() : block_type(BlockType::Air) {}
 
 Block::Block(BlockType type) : block_type(type) {}
 
+BlockRegistry::BlockRegistry() {
+    blocks[0] = Block(BlockType::Air);
+    block_count = 1;
+}
+
+uint8_t BlockRegistry::addBlock(const Block& block) {
+    for (size_t i = 0; i < block_count; i++) {
+        if (blocks[i].block_type == block.block_type) {
+            return static_cast<uint8_t>(i);
+        }
+    }
+    
+    if (block_count < MAX_BLOCKS) {
+        blocks[block_count] = block;
+        return static_cast<uint8_t>(block_count++);
+    }
+    
+    return 0;
+}
+
+const Block& BlockRegistry::getBlock(uint8_t id) const {
+    if (id < block_count) {
+        return blocks[id];
+    }
+    return blocks[0];
+}
+
+size_t BlockRegistry::getBlockCount() const {
+    return block_count;
+}
+
+ChunkSmol::ChunkSmol() {
+    for (int32_t y = 0; y < 16; y++) {
+        for (int32_t z = 0; z < 16; z++) {
+            for (int32_t x = 0; x < 16; x++) {
+                block_ids[y][z][x] = 0;
+            }
+        }
+    }
+}
+
+void ChunkSmol::setBlock(int32_t y, int32_t z, int32_t x, const Block& block) {
+    if (y >= 0 && y < 16 && z >= 0 && z < 16 && x >= 0 && x < 16) {
+        uint8_t id = registry.addBlock(block);
+        block_ids[y][z][x] = id;
+    }
+}
+
+const BlockRegistry& ChunkSmol::getRegistry() const {
+    return registry;
+}
+
+uint8_t ChunkSmol::getBlockId(int32_t y, int32_t z, int32_t x) const {
+    return block_ids[y][z][x];
+}
+
 Chunk::Chunk(int32_t x, int32_t z) : x(x), z(z) {}
 
 Chunk ChunkGenerator::generate(int32_t x, int32_t z) {
@@ -47,11 +103,9 @@ void ChunkGenerator::generateBaseStructure(Chunk &chunk,
                     float height = heights[i_x][i_z];
 
                     if (height > absolute_y) {
-                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
-                            BlockType::Stone;
+                        chunk_smol.setBlock(i_y, i_z, 15 - i_x, Block(BlockType::Stone));
                     } else {
-                        chunk_smol.blocks[i_y][i_z][15 - i_x].block_type =
-                            BlockType::Air;
+                        chunk_smol.setBlock(i_y, i_z, 15 - i_x, Block(BlockType::Air));
                     }
                 }
             }

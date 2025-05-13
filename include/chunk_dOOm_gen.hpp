@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
+#include <array>
 
 /*#define DEBUG_HEIGHTS*/
 
@@ -29,9 +30,33 @@ class Block {
     explicit Block(BlockType block_type);
 };
 
-class ChunkSmol {
+class BlockRegistry {
+  private:
+    static constexpr size_t MAX_BLOCKS = 256;
+    Block blocks[MAX_BLOCKS];
+    size_t block_count = 0;
+    
   public:
-    Block blocks[16][16][16]; // TODO: change to private with methods?
+    BlockRegistry();
+    
+    uint8_t addBlock(const Block& block);
+    
+    size_t getBlockCount() const;
+    const Block& getBlock(uint8_t id) const;
+};
+
+class ChunkSmol {
+  private:
+    uint8_t block_ids[16][16][16];
+    BlockRegistry registry;
+    
+  public:
+    ChunkSmol();
+    
+    void setBlock(int32_t y, int32_t z, int32_t x, const Block& block);
+
+    const BlockRegistry& getRegistry() const;
+    uint8_t getBlockId(int32_t y, int32_t z, int32_t x) const;
 };
 
 class Chunk {
