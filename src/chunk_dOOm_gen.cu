@@ -73,18 +73,26 @@ Chunk ChunkGenerator::generate(int32_t x, int32_t z) {
     Chunk chunk{x, z};
 
     // Create a device vector to store heights
-    thrust::device_vector<float> d_heights(16 * 16);
+    thrust::device_vector<float> heights(16 * 16);
 
     // Use a lambda to map from index to (x,z) and call getBaseTerrainHeight
     thrust::transform(
         thrust::counting_iterator<uint32_t>(0),
-        thrust::counting_iterator<uint32_t>(16 * 16), d_heights.begin(),
+        thrust::counting_iterator<uint32_t>(16 * 16), heights.begin(),
         [this, chunk_x = chunk.x, chunk_z = chunk.z] __device__(uint32_t idx) {
             int32_t local_x = idx % 16;
             int32_t local_z = idx / 16;
             return getBaseTerrainHeight(chunk_x + local_x, chunk_z + local_z);
         });
 
+    // Apply only basic stone generation
+    generateBaseStructure(chunk, heights);
+
+    return chunk;
+}
+
+void ChunkGenerator::generateBaseStructure(Chunk &chunk,
+                                           const thrust::device_vector<float> &d_heights) {
     // Copy heights to host for further processing
     thrust::host_vector<float> h_heights = d_heights;
 
@@ -96,14 +104,6 @@ Chunk ChunkGenerator::generate(int32_t x, int32_t z) {
         }
     }
 
-    // Apply only basic stone generation
-    generateBaseStructure(chunk, heights);
-
-    return chunk;
-}
-
-void ChunkGenerator::generateBaseStructure(Chunk &chunk,
-                                           const float heights[16][16]) {
     // Iterate through each sub-chunk (chunk_smol)
     for (int32_t i_ch = 0; i_ch < 24; i_ch++) {
         ChunkSmol &chunk_smol = chunk.chunk_smols[i_ch];

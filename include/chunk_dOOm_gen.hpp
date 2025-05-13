@@ -10,7 +10,7 @@
 #include <vector>
 #include <array>
 #include <cuda_runtime.h>
-
+#include <thrust/device_vector.h>
 /*#define DEBUG_HEIGHTS*/
 
 struct FloatCoord2 {
@@ -63,7 +63,7 @@ class ChunkGenerator {
     Chunk generate(int32_t x, int32_t z);
 
     // Individual generation stages (now only using base structure)
-    void generateBaseStructure(Chunk &chunk, const float heights[16][16]);
+    void generateBaseStructure(Chunk &chunk, const thrust::device_vector<float> &heights);
     
     // Density/noise function
     __device__ float getBaseTerrainHeight(float x, float z);
