@@ -21,16 +21,25 @@ __device__ float noise(int32_t seed, int32_t x, int32_t z, float frequency,
 
 __device__ float noise(int32_t seed, int32_t x, int32_t y, int32_t z,
                        float frequency, int32_t octaves) {
-    return cudaNoise::repeaterSimplex(
-        make_float3(x * frequency, y * frequency, z * frequency), 1.0f, seed,
-        octaves, 2.0f, 0.5f);
+    return cudaNoise::repeaterSimplex(make_float3(x, y, z), frequency, seed,
+                                      octaves, 2.0f, 0.5f);
 }
 
-__device__ float cave_noise(int32_t seed, int32_t x, int32_t y, int32_t z) {
-    float frequency = 0.05;
-    return cudaNoise::repeaterSimplex(
-        make_float3(x * frequency, y * frequency, z * frequency), 1.0f, seed, 2,
-        2.0f, 0.5f);
+__device__ bool cave_noise(int32_t seed, int32_t x, int32_t y, int32_t z) {
+    float noodle1 = noise(seed, x, y, z, 0.01f, 2);
+    float noodle2 = noise(seed + 1, x, y, z, 0.02f, 2);
+
+    float cavern = noise(seed + 2, x, y, z, 0.01, 3);
+
+    float noodle1_probability =
+        std::max(1.f - std::abs(noodle1 - 0.2f) * 10.0f, 0.f);
+    float noodle2_probability =
+        std::max(1.f - std::abs(noodle2 - 0.2f) * 10.0f, 0.f);
+
+    float cavern_probability = std::max(0.f, cavern - 0.6f);
+
+    return (noodle1_probability * noodle2_probability + cavern_probability) >
+           0.1f;
 }
 
 // All of the 2d noises should be computed here
@@ -146,23 +155,23 @@ std::vector<Chunk> ChunkGenerator::generate_all(int32_t region_x,
             return get_flat_info(seed, chunk_x + local_x, chunk_z + local_z);
         });
 
-    thrust::device_vector<VolumetricInfo> volumetrics(16 * 16 * 32 * 32 * 24 *
-                                                      16);
+    thrust::device_vector<VolumetricInfo> volumetrics(16 * 16 * 16 * 24 * 32 *
+                                                      32);
 
     thrust::transform(
-        thrust::counting_iterator<uint32_t>(0),
-        thrust::counting_iterator<uint32_t>(16 * 16 * 32 * 32 * 24 * 16),
+        thrust::counting_iterator<int32_t>(0),
+        thrust::counting_iterator<int32_t>(16 * 16 * 32 * 32 * 24 * 16),
         volumetrics.begin(),
-        [seed = seed, region_x, region_z] __device__(uint32_t idx) {
+        [seed = seed, region_x, region_z] __device__(int32_t idx) {
             // 16 x 16 x 16 blocks in subchunk
             // 24 subchunks in chunk
             // 32 x 32 chunks in region
 
-            uint32_t local_x = idx % 16;
-            uint32_t local_z = (idx / 16) % 16;
-            uint32_t local_y = (idx / 16 / 16) % 16;
-            uint32_t subchunk_id = (idx / (16 * 16 * 16)) % 24;
-            uint32_t cell_id = (idx / (16 * 16 * 16)) % 24;
+            int32_t local_x = idx % 16;
+            int32_t local_z = (idx / 16) % 16;
+            int32_t local_y = (idx / 16 / 16) % 16;
+            int32_t subchunk_id = (idx / (16 * 16 * 16)) % 24;
+            int32_t cell_id = idx / (16 * 16 * 16 * 24);
 
             int32_t cell_id_x = cell_id / 32;
             int32_t cell_id_z = cell_id % 32;
@@ -175,7 +184,7 @@ std::vector<Chunk> ChunkGenerator::generate_all(int32_t region_x,
             int32_t z = chunk_z + local_z;
 
             auto density = noise(seed + 4, x, y, z, 0.1f, 2);
-            bool cave = cave_noise(seed + 5, x, y, z) < -0.2f;
+            bool cave = cave_noise(seed + 5, x, y, z);
 
             return VolumetricInfo{density, cave};
         });
@@ -194,6 +203,8 @@ std::vector<Chunk> ChunkGenerator::generate_all(int32_t region_x,
         auto chunk = &chunks.emplace_back(x, z);
         chunk_smols[cell_id] = chunk->chunk_smols.get();
     }
+
+    cudaDeviceSynchronize();
 
     ChunkSmol **all_chunks = thrust::raw_pointer_cast(chunk_smols.data());
     FlatInfo *all_flats = thrust::raw_pointer_cast(flats.data());
