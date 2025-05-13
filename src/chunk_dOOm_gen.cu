@@ -28,6 +28,4 @@ std::unique_ptr<ChunkSmol, CudaDeleter> alloc_helper() {
     return std::unique_ptr<ChunkSmol, CudaDeleter>(chunk_smol);
 }
 
-Chunk::Chunk(int32_t x, int32_t z) : x(x), z(z), chunk_smols(alloc_helper()) {
-    // Initialize with 24 subchunks - will be filled by the generator
-}
+Chunk::Chunk(int32_t x, int32_t z) : x(x), z(z), chunk_smols(alloc_helper()) {}

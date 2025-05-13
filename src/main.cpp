@@ -10,7 +10,7 @@
 #include <thrust/device_vector.h>
 
 void sample_write_chunk(int region_x, int region_z) {
-    ChunkGenerator generator;
+    ChunkGenerator generator(0);
 
     McAnvilWriter writer;
     auto buffers = writer.allBuffers();
