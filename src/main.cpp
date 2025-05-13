@@ -27,23 +27,15 @@ void sample_write_chunk(int region_x, int region_z) {
     // Convert the array to a vector for easier handling
     for (int i = 0; i < buffers.size(); i++) {
         chunks.push_back(std::move(chunk_array[i]));
-        std::cout << "Added chunk at "
-                  << std::format("({},{})", chunks[i].x, chunks[i].z)
-                  << std::endl;
     }
 
     cudaDeviceSynchronize();
 
-    // Write all chunks in parallel using Thrust
-    std::cout << "Writing " << chunks.size() << " chunks in parallel..."
-              << std::endl;
     write_chunks_parallel(buffers, chunks);
 
     cudaDeviceSynchronize();
 
-    std::cout << "Serializing region..." << std::endl;
     std::vector<char> data = writer.serialize();
-    std::cout << "Region size: " << data.size() << std::endl;
 
     {
         std::ofstream file(std::format("r.{}.{}.mca", region_x, region_z),
@@ -51,11 +43,6 @@ void sample_write_chunk(int region_x, int region_z) {
         file.write(data.data(), data.size());
         file.close();
     }
-    std::cout << "Region written to r." << region_x << "." << region_z << ".mca"
-              << std::endl;
-
-    // Clean up is handled by smart pointers now
-    std::cout << "Cleanup complete." << std::endl;
 }
 
 int main() {

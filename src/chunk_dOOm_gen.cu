@@ -35,9 +35,6 @@ Chunk::Chunk(int32_t x, int32_t z) : x(x), z(z), chunk_smols(alloc_helper()) {
 // Device function to generate a single ChunkSmol
 __device__ void generateSmolChunk(ChunkSmol *chunk_smol, int32_t i_ch,
                                   const float *heights) {
-    auto air = chunk_smol->setBlock(0, 0, 0, make_block("minecraft:air"));
-    auto stone = chunk_smol->setBlock(0, 0, 0, make_block("minecraft:stone"));
-
     for (uint32_t i_y = 0; i_y < 16; i_y++) {
         // Process all 4096 blocks in this subchunk
         for (uint32_t i_z = 0; i_z < 16; i_z++) {
@@ -50,9 +47,11 @@ __device__ void generateSmolChunk(ChunkSmol *chunk_smol, int32_t i_ch,
 
                 // Set the appropriate block based on height
                 if (height > absolute_y) {
-                    chunk_smol->setBlock(i_y, i_z, 15 - i_x, stone);
+                    chunk_smol->setBlock(i_y, i_z, 15 - i_x,
+                                         make_block("minecraft:stone"));
                 } else {
-                    chunk_smol->setBlock(i_y, i_z, 15 - i_x, air);
+                    chunk_smol->setBlock(i_y, i_z, 15 - i_x,
+                                         make_block("minecraft:air"));
                 }
             }
         }
@@ -85,6 +84,8 @@ Chunk *ChunkGenerator::generate_all(int32_t region_x, int32_t region_z) {
             return getBaseTerrainHeight(chunk_x + local_x, chunk_z + local_z);
         });
 
+    thrust::device_vector<ChunkSmol *> chunk_smols(32 * 32);
+
     for (auto cell_id = 0; cell_id < 32 * 32; cell_id++) {
         int32_t cell_id_x = cell_id / 32;
         int32_t cell_id_z = cell_id % 32;
@@ -98,28 +99,28 @@ Chunk *ChunkGenerator::generate_all(int32_t region_x, int32_t region_z) {
             Chunk(x, z); // Placement new to construct the Chunk object
         auto chunk = chunks + cell_id; // Get the pointer to the current chunk
 
-        // Apply only basic stone generation
-        {
-            // Get raw pointers for use in the device code
-            ChunkSmol *raw_chunks = chunk->chunk_smols.get();
-
-            // Process all 24 smol chunks in parallel using thrust::for_each
-            // with lambda
-            thrust::for_each(
-                thrust::counting_iterator<uint32_t>(0),
-                thrust::counting_iterator<uint32_t>(24),
-                [raw_chunks, cell_heights] __device__(const uint32_t &i_ch) {
-                    // Placement new to construct the ChunkSmol object
-                    new (raw_chunks + i_ch) ChunkSmol();
-
-                    // Generate this smol chunk
-                    generateSmolChunk(raw_chunks + i_ch, i_ch, cell_heights);
-                });
-
-            std::cout << "Base structure generated for chunk (" << chunk->x
-                      << ", " << chunk->z << ")" << std::endl;
-        }
+        chunk_smols[cell_id] = chunk->chunk_smols.get();
     }
+
+    ChunkSmol **all_chunks = thrust::raw_pointer_cast(chunk_smols.data());
+    float *all_heights = thrust::raw_pointer_cast(heights.data());
+
+    thrust::for_each(
+        thrust::counting_iterator<uint32_t>(0),
+        thrust::counting_iterator<uint32_t>(24 * 32 * 32),
+        [all_chunks, all_heights] __device__(const uint32_t &smol_idx) {
+            const uint32_t i_ch = smol_idx % 24;
+            const uint32_t cell_id = smol_idx / 24;
+
+            ChunkSmol *raw_chunks = all_chunks[cell_id];
+
+            // Placement new to construct the ChunkSmol object
+            new (raw_chunks + i_ch) ChunkSmol();
+
+            // Generate this smol chunk
+            generateSmolChunk(raw_chunks + i_ch, i_ch,
+                              all_heights + cell_id * 16 * 16);
+        });
 
     return chunks;
 }
