@@ -37,11 +37,16 @@ __device__ float cave_noise(int32_t seed, int32_t x, int32_t y, int32_t z) {
 __device__ FlatInfo ChunkGenerator::get_flat_info(int32_t seed, int32_t x,
                                                   int32_t z) {
     auto shatter = std::clamp<float>(
-        noise(seed + 1, x, z, 0.001f, 3) * 0.5f + 0.5f, 0.f, 1.f);
+        noise(seed + 1, x, z, 0.005f, 2) * 0.5f + 0.5f, 0.f, 1.f);
     auto height = std::clamp<float>(
-        (noise(seed, x, z, 0.01f, 3) + 1) * (32 + 32 * shatter) + 32, 0, 384);
+        (noise(seed, x, z, 0.01f, 3) + 1) * (16 + 48 * shatter) + 32, 0, 384);
+    auto temperature = std::clamp<float>(
+        noise(seed + 2, x, z, 0.005f, 5) * 0.5f + 0.5f, 0.f, 1.f);
+    auto vegetation = std::clamp<float>(noise(seed + 3, x, z, 0.25f, 1) * 0.5f +
+                                            0.5f + shatter * 0.1f,
+                                        0.f, 1.f);
 
-    return FlatInfo{height, shatter};
+    return FlatInfo{height, shatter, temperature, vegetation};
 }
 
 // And here we use them
@@ -86,8 +91,28 @@ __device__ void ChunkGenerator::replaceSurface(ChunkWrapper &chunk,
             for (int32_t local_y = starting_height; local_y > 32; local_y--) {
                 if (chunk.isSameBlock(local_y, local_z, 15 - local_x,
                                       make_block("minecraft:stone"))) {
-                    chunk.setBlock(local_y, local_z, 15 - local_x,
-                                   make_block("minecraft:grass_block"));
+                    if (info.temperature < 0.4f) {
+                        chunk.setBlock(local_y, local_z, 15 - local_x,
+                                       make_block<MAKE_KV("snowy", "true")>(
+                                           "minecraft:grass_block"));
+
+                        chunk.setBlock(local_y + 1, local_z, 15 - local_x,
+                                       make_block("minecraft:snow"));
+                    } else {
+                        chunk.setBlock(local_y, local_z, 15 - local_x,
+                                       make_block("minecraft:grass_block"));
+
+                        if (info.vegetation > 0.7) {
+                            chunk.setBlock(local_y + 1, local_z, 15 - local_x,
+                                           make_block("minecraft:tall_grass"));
+                            chunk.setBlock(local_y + 2, local_z, 15 - local_x,
+                                           make_block<MAKE_KV("half", "upper")>(
+                                               "minecraft:tall_grass"));
+                        } else if (info.vegetation > 0.6) {
+                            chunk.setBlock(local_y + 1, local_z, 15 - local_x,
+                                           make_block("minecraft:short_grass"));
+                        }
+                    }
                     break;
                 }
             }

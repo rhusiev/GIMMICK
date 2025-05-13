@@ -8,6 +8,8 @@ class FlatInfo {
   public:
     float height;
     float shatter;
+    float temperature;
+    float vegetation;
 };
 
 class VolumetricInfo {
