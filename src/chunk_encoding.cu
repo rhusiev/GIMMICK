@@ -1,13 +1,13 @@
-#include "./chunk_encoding.hpp"
 #include "./blocks.hpp"
+#include "./chunk_encoding.hpp"
 #include "./nbt.hpp"
+#include <cuda_runtime.h>
+#include <thrust/device_vector.h>
 
-void encode_subchunk(ChunkSmol &chunk, NBTSerializer *serializer) {
-    // Use the new ChunkSmol method to serialize block states
-    chunk.serializeBlockStates(serializer);
-}
+// Define a global CUDA kernel for subchunk encoding
 
-void write_chunk(OutputBuffer *buf, Chunk &chunk) {
+__global__ void chunk_writer(OutputBuffer *buf, ChunkSmol *chunk_smols,
+                             int32_t x, int32_t z) {
     NBTSerializer serializer(buf);
     serializer.writeTagHeader("", NBT_TagType::TAG_Compound);
 
@@ -15,9 +15,9 @@ void write_chunk(OutputBuffer *buf, Chunk &chunk) {
     serializer.writeInt(4325);
 
     serializer.writeTagHeader("xPos", NBT_TagType::TAG_Int);
-    serializer.writeInt(chunk.x / 16);
+    serializer.writeInt(x / 16);
     serializer.writeTagHeader("zPos", NBT_TagType::TAG_Int);
-    serializer.writeInt(chunk.z / 16);
+    serializer.writeInt(z / 16);
     serializer.writeTagHeader("yPos", NBT_TagType::TAG_Int);
     serializer.writeInt(-4);
 
@@ -35,7 +35,11 @@ void write_chunk(OutputBuffer *buf, Chunk &chunk) {
         {
             serializer.writeTagHeader("block_states",
                                       NBT_TagType::TAG_Compound);
-            encode_subchunk(chunk.chunk_smols[y + 4], &serializer);
+
+            // Launch the encoding kernel with a single thread
+            // Assuming chunk.chunk_smols[y + 4] is already on the device
+            chunk_smols[y + 4].encodeBlockData(&serializer);
+
             serializer.writeTagEnd();
         }
 
@@ -43,4 +47,8 @@ void write_chunk(OutputBuffer *buf, Chunk &chunk) {
     }
 
     serializer.writeTagEnd();
+}
+
+void write_chunk(OutputBuffer *buf, Chunk &chunk) {
+    chunk_writer<<<1, 1>>>(buf, chunk.chunk_smols, chunk.x, chunk.z);
 }

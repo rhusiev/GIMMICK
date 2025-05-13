@@ -1,16 +1,17 @@
 #ifndef INCLUDE_CHUNK_DOOM_GEN_HPP_
 #define INCLUDE_CHUNK_DOOM_GEN_HPP_
 
-#include "./block_template.hpp"
 #include "./block_registry.hpp"
+#include "./block_template.hpp"
 #include "./nbt.hpp"
+#include "anvil.hpp"
+#include <array>
 #include <cmath>
 #include <cstdint>
-#include <memory>
-#include <vector>
-#include <array>
 #include <cuda_runtime.h>
+#include <memory>
 #include <thrust/device_vector.h>
+#include <vector>
 /*#define DEBUG_HEIGHTS*/
 
 struct FloatCoord2 {
@@ -29,32 +30,79 @@ class ChunkSmol {
   private:
     uint8_t block_ids[16][16][16];
     BlockRegistry registry;
-    
+
   public:
-    ChunkSmol();
-    
-    template<typename Block>
-    void setBlock(int32_t y, int32_t z, int32_t x, const Block& block) {
+    template <typename Block>
+    __device__ void setBlock(int32_t y, int32_t z, int32_t x,
+                             const Block block) {
         if (y >= 0 && y < 16 && z >= 0 && z < 16 && x >= 0 && x < 16) {
             uint8_t id = registry.addBlock(block);
             block_ids[y][z][x] = id;
         }
     }
 
-    uint8_t getBlockId(int32_t y, int32_t z, int32_t x) const;
-    
+    __device__ uint8_t getBlockId(int32_t y, int32_t z, int32_t x) const {
+        return block_ids[y][z][x];
+    };
+
     // Add new methods for palette encoding
-    void serializeBlockStates(NBTSerializer* serializer) const;
-    void encodeBlockData(NBTSerializer* serializer) const;
+    __device__ void serializeBlockStates(NBTSerializer *serializer) const {
+        // Serialize the palette directly from registry
+        registry.serializePalette(serializer);
+
+        // Get bit count required for encoding and encode the block data
+        encodeBlockData(serializer);
+    }
+
+    __device__ void encodeBlockData(NBTSerializer *serializer) const {
+        // First determine the number of bits needed per block
+        uint32_t n_bits = registry.getRequiredBitsPerBlock();
+
+        // Skip data section entirely if palette is empty or only has air
+        if (n_bits == 0) {
+            return;
+        }
+
+        uint32_t blocks_per_long = 64 / n_bits;
+        uint32_t longs_needed = 4096 / blocks_per_long;
+        if (4096 % blocks_per_long != 0) {
+            longs_needed++;
+        }
+
+        serializer->writeTagHeader("data", NBT_TagType::TAG_Long_Array);
+        serializer->writeInt(longs_needed);
+
+        for (uint32_t i = 0; i < longs_needed; i++) {
+            uint32_t first_block = i * blocks_per_long;
+            uint64_t packed_data = 0;
+
+            for (uint32_t j = 0;
+                 j < blocks_per_long && (first_block + j) < 4096; j++) {
+                uint32_t block_index = first_block + j;
+                uint32_t y = block_index / 256;
+                uint32_t z = (block_index % 256) / 16;
+                uint32_t x = block_index % 16;
+
+                uint64_t block_id = getBlockId(y, z, x);
+
+                // Minecraft requires most significant bits first
+                uint32_t shift = (blocks_per_long - 1 - j) * n_bits;
+                packed_data |= (block_id << shift);
+            }
+
+            serializer->writeLong(packed_data);
+        }
+    };
 };
 
 class Chunk {
   public:
     int32_t x;
     int32_t z;
-    ChunkSmol chunk_smols[24]; // TODO: change to private with methods?
+    ChunkSmol *chunk_smols;
 
     Chunk(int32_t x, int32_t z);
+    ~Chunk();
 };
 
 // Simplified generation system that only creates stone terrain
@@ -63,8 +111,9 @@ class ChunkGenerator {
     Chunk generate(int32_t x, int32_t z);
 
     // Individual generation stages (now only using base structure)
-    void generateBaseStructure(Chunk &chunk, const thrust::device_vector<float> &heights);
-    
+    void generateBaseStructure(Chunk &chunk,
+                               const thrust::device_vector<float> &heights);
+
     // Density/noise function
     __device__ float getBaseTerrainHeight(float x, float z);
 };

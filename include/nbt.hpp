@@ -4,6 +4,7 @@
 #include "./buffer.hpp"
 #include <cstdint>
 #include <cstring>
+#include <cuda_runtime.h>
 
 enum class NBT_TagType : uint8_t {
     TAG_End = 0,
@@ -24,16 +25,20 @@ enum class NBT_TagType : uint8_t {
 class NBTSerializer {
   private:
     OutputBuffer *buffer;
-    bool writeTagType(NBT_TagType type);
+    
+    __host__ __device__ bool writeTagType(NBT_TagType type) {
+        return buffer->writeByte(static_cast<uint8_t>(type));
+    }
 
   public:
-    NBTSerializer(OutputBuffer *buf) : buffer(buf) {}
-    
+    __host__ __device__ NBTSerializer(OutputBuffer *buf) : buffer(buf) {}
+
     // Access the underlying buffer
-    OutputBuffer* getBuffer() const { return buffer; }
+    __host__ __device__ OutputBuffer *getBuffer() const { return buffer; }
 
     template <std::size_t N>
-    bool writeTagHeader(const char (&name)[N], NBT_TagType type) {
+    __host__ __device__ bool writeTagHeader(const char (&name)[N],
+                                            NBT_TagType type) {
         if (!writeTagType(type))
             return false;
         if (!buffer->writeByte(static_cast<uint8_t>((N - 1) >> 8)))
@@ -46,8 +51,9 @@ class NBTSerializer {
     }
 
     template <std::size_t N>
-    bool writeListTagHeader(const char (&name)[N], NBT_TagType type,
-                            int32_t length) {
+    __host__ __device__ bool writeListTagHeader(const char (&name)[N],
+                                                NBT_TagType type,
+                                                int32_t length) {
         if (!writeTagType(NBT_TagType::TAG_List))
             return false;
         if (!buffer->writeByte(static_cast<uint8_t>((N - 1) >> 8)))
@@ -61,13 +67,39 @@ class NBTSerializer {
         return writeInt(length);
     }
 
-    bool writeTagEnd();
-    bool writeByte(int8_t v);
-    bool writeShort(int16_t v);
-    bool writeInt(int32_t v);
-    bool writeLong(int64_t v);
+    __host__ __device__ bool writeTagEnd() { 
+        return writeTagType(NBT_TagType::TAG_End); 
+    }
+    
+    __host__ __device__ bool writeByte(int8_t v) {
+        return buffer->writeByte(static_cast<uint8_t>(v));
+    }
+    
+    __host__ __device__ bool writeShort(int16_t v) {
+        return buffer->writeByte(static_cast<uint8_t>(v >> 8)) &&
+               buffer->writeByte(static_cast<uint8_t>(v & 0xFF));
+    }
+    
+    __host__ __device__ bool writeInt(int32_t v) {
+        return buffer->writeByte(static_cast<uint8_t>(v >> 24)) &&
+               buffer->writeByte(static_cast<uint8_t>((v >> 16) & 0xFF)) &&
+               buffer->writeByte(static_cast<uint8_t>((v >> 8) & 0xFF)) &&
+               buffer->writeByte(static_cast<uint8_t>(v & 0xFF));
+    }
+    
+    __host__ __device__ bool writeLong(int64_t v) {
+        return buffer->writeByte(static_cast<uint8_t>(v >> 56)) &&
+               buffer->writeByte(static_cast<uint8_t>((v >> 48) & 0xFF)) &&
+               buffer->writeByte(static_cast<uint8_t>((v >> 40) & 0xFF)) &&
+               buffer->writeByte(static_cast<uint8_t>((v >> 32) & 0xFF)) &&
+               buffer->writeByte(static_cast<uint8_t>((v >> 24) & 0xFF)) &&
+               buffer->writeByte(static_cast<uint8_t>((v >> 16) & 0xFF)) &&
+               buffer->writeByte(static_cast<uint8_t>((v >> 8) & 0xFF)) &&
+               buffer->writeByte(static_cast<uint8_t>(v & 0xFF));
+    }
 
-    template <std::size_t N> bool writeString(const char (&str)[N]) {
+    template <std::size_t N> 
+    __host__ __device__ bool writeString(const char (&str)[N]) {
         if (!buffer->writeByte(static_cast<uint8_t>((N - 1) >> 8)))
             return false;
         if (!buffer->writeByte(static_cast<uint8_t>((N - 1) & 0xFF)))

@@ -2,33 +2,41 @@
 #include <zlib.h>
 
 OutputBuffer *McAnvilWriter::getBufferFor(uint32_t x, uint32_t z) {
-    unsigned int ux = x % REGION_SIZE;
-    unsigned int uz = z % REGION_SIZE;
+    std::cout << "Region size: " << REGION_SIZE << std::endl;
+    std::cout << "Raw x: " << x << ", z: " << z << std::endl;
+    uint32_t ux = x % REGION_SIZE;
+    uint32_t uz = z % REGION_SIZE;
+    std::cout << "Getting buffer for abs chunk " << ux << ", " << uz
+              << std::endl;
 
     if (chunkBuffers[uz][ux].has_value()) {
-        return &chunkBuffers[uz][ux].value();
+        std::cout << "Buffer already exists" << std::endl;
+        return chunkBuffers[uz][ux].value().getOutputBuffer();
     } else {
+        std::cout << "Creating new buffer" << std::endl;
         chunkBuffers[uz][ux].emplace(1024 * 1024);
-        return &chunkBuffers[uz][ux].value();
+        std::cout << "Buffer created for chunk " << x << ", " << z << std::endl;
+        return chunkBuffers[uz][ux].value().getOutputBuffer();
     }
 }
 
-std::vector<char> McAnvilWriter::serialize() const {
+std::vector<char> McAnvilWriter::serialize() {
     std::optional<std::vector<char>> compressedBuffers[REGION_SIZE]
                                                       [REGION_SIZE];
 
     for (int z = 0; z < REGION_SIZE; z++) {
         for (int x = 0; x < REGION_SIZE; x++) {
             if (chunkBuffers[z][x].has_value()) {
-                const auto &buffer = chunkBuffers[z][x].value();
+                auto buffer = chunkBuffers[z][x].value().getData();
+                // std::vector<char> buffer;
 
                 // Compress the buffer
-                uLongf compressedSize = compressBound(buffer.getOffset());
+                uLongf compressedSize = compressBound(buffer.size());
                 std::vector<char> compressedData(compressedSize);
                 if (compress(reinterpret_cast<Bytef *>(compressedData.data()),
                              &compressedSize,
-                             reinterpret_cast<const Bytef *>(buffer.getData()),
-                             buffer.getOffset()) == Z_OK) {
+                             reinterpret_cast<const Bytef *>(buffer.data()),
+                             buffer.size()) == Z_OK) {
                     compressedData.resize(compressedSize);
                     compressedBuffers[z][x].emplace(std::move(compressedData));
                 }

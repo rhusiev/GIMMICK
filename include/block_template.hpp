@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <cuda_runtime.h>
 
 #include "./nbt.hpp"
 
@@ -10,9 +11,13 @@ template <size_t N> class Block {
   public:
     uint8_t data[N];
 
-    constexpr Block(const uint8_t *buffer) { std::memcpy(data, buffer, N); }
+    __host__ __device__ constexpr Block(const uint8_t *buffer) {
+        for (size_t i = 0; i < N; ++i) {
+            data[i] = buffer[i];
+        }
+    }
 
-    constexpr size_t getSize() const { return N; }
+    __host__ __device__ constexpr size_t getSize() const { return N; }
 };
 
 template <typename... Args>
@@ -32,10 +37,12 @@ constexpr size_t compute_size(size_t name_len, const Args &...args) {
 }
 
 template <size_t name_len>
-constexpr auto make_block(const char (&blockName)[name_len]) {
+__host__ __device__ constexpr auto
+make_block(const char (&blockName)[name_len]) {
     constexpr size_t N = compute_size(name_len - 1); // TODO add properties
 
-    OutputBuffer buffer(N);
+    uint8_t raw_buffer[N];
+    OutputBuffer buffer(raw_buffer, N);
     NBTSerializer serializer(&buffer);
 
     // Write the block name
@@ -52,7 +59,7 @@ constexpr auto make_block(const char (&blockName)[name_len]) {
         serializer.writeTagEnd();
     }
 
-    return Block<N>(buffer.getData());
+    return Block<N>(raw_buffer);
 }
 
 #endif // BLOCK_TEMPLATE_HPP
