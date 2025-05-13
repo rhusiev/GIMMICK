@@ -16,6 +16,7 @@ class Coord:
 class House:
     corner1: Coord
     corner2: Coord
+    orientation: bool
 
 
 def rect_bounds(h: House) -> tuple[int, int, int, int]:
