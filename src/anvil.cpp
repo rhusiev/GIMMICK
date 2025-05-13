@@ -2,20 +2,13 @@
 #include <zlib.h>
 
 OutputBuffer *McAnvilWriter::getBufferFor(uint32_t x, uint32_t z) {
-    std::cout << "Region size: " << REGION_SIZE << std::endl;
-    std::cout << "Raw x: " << x << ", z: " << z << std::endl;
     uint32_t ux = x % REGION_SIZE;
     uint32_t uz = z % REGION_SIZE;
-    std::cout << "Getting buffer for abs chunk " << ux << ", " << uz
-              << std::endl;
 
     if (chunkBuffers[uz][ux].has_value()) {
-        std::cout << "Buffer already exists" << std::endl;
         return chunkBuffers[uz][ux].value().getOutputBuffer();
     } else {
-        std::cout << "Creating new buffer" << std::endl;
         chunkBuffers[uz][ux].emplace(1024 * 1024);
-        std::cout << "Buffer created for chunk " << x << ", " << z << std::endl;
         return chunkBuffers[uz][ux].value().getOutputBuffer();
     }
 }

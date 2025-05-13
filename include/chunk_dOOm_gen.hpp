@@ -33,12 +33,15 @@ class ChunkSmol {
 
   public:
     template <typename Block>
-    __device__ void setBlock(int32_t y, int32_t z, int32_t x,
-                             const Block block) {
-        if (y >= 0 && y < 16 && z >= 0 && z < 16 && x >= 0 && x < 16) {
-            uint8_t id = registry.addBlock(block);
-            block_ids[y][z][x] = id;
-        }
+    __device__ uint8_t setBlock(int32_t y, int32_t z, int32_t x,
+                                const Block &block) {
+        uint8_t id = registry.addBlock(block);
+        block_ids[y][z][x] = id;
+        return id;
+    }
+
+    __device__ void setBlock(int32_t y, int32_t z, int32_t x, uint8_t id) {
+        block_ids[y][z][x] = id;
     }
 
     __device__ uint8_t getBlockId(int32_t y, int32_t z, int32_t x) const {
@@ -95,29 +98,34 @@ class ChunkSmol {
     };
 };
 
+struct CudaDeleter {
+    void operator()(void *ptr) const noexcept {
+        if (ptr) {
+            cudaError_t err = cudaFree(ptr);
+            if (err != cudaSuccess) {
+                std::cerr << "cudaFree failed: " << cudaGetErrorString(err)
+                          << std::endl;
+            }
+        }
+    }
+};
+
 class Chunk {
   public:
     int32_t x;
     int32_t z;
-    ChunkSmol *chunk_smols;
+    std::unique_ptr<ChunkSmol, CudaDeleter> chunk_smols;
 
     Chunk(int32_t x, int32_t z);
-    ~Chunk();
 };
 
 // Simplified generation system that only creates stone terrain
 class ChunkGenerator {
   public:
-    Chunk generate(int32_t x, int32_t z);
-
-    // Individual generation stages (now only using base structure)
-    void generateBaseStructure(Chunk &chunk,
-                               const thrust::device_vector<float> &heights);
+    Chunk *generate_all(int32_t region_x, int32_t region_z);
 
     // Density/noise function
-    __device__ float getBaseTerrainHeight(float x, float z);
+    __device__ static float getBaseTerrainHeight(float x, float z);
 };
-
-Chunk generate_chunk(int32_t x, int32_t z);
 
 #endif // INCLUDE_CHUNK_DOOM_GEN_HPP_

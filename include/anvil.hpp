@@ -11,6 +11,18 @@
 #include <thrust/host_vector.h>
 #include <vector>
 
+// Helper function to check CUDA errors
+#define CHECK_CUDA_ERROR(call)                                                 \
+    {                                                                          \
+        cudaError_t err = call;                                                \
+        if (err != cudaSuccess) {                                              \
+            std::cerr << "CUDA error in " << __FILE__ << " at line "           \
+                      << __LINE__ << ": " << cudaGetErrorString(err) << " ("   \
+                      << err << ")" << std::endl;                              \
+            exit(1);                                                           \
+        }                                                                      \
+    }
+
 class BufferContainer {
   private:
     uint8_t *buffer;
@@ -18,32 +30,21 @@ class BufferContainer {
 
   public:
     BufferContainer(size_t size) : outputBuffer(nullptr) {
-        cudaMalloc(&buffer, size);
-
-        // Create the OutputBuffer on the device
-        OutputBuffer tmpBuffer(buffer, size);
-        cudaMalloc(&outputBuffer, sizeof(OutputBuffer));
-        cudaMemcpy(&outputBuffer, &tmpBuffer, sizeof(OutputBuffer),
-                   cudaMemcpyHostToDevice);
+        CHECK_CUDA_ERROR(cudaMalloc(&buffer, size));
+        CHECK_CUDA_ERROR(
+            cudaMallocManaged(&outputBuffer, sizeof(OutputBuffer)));
+        new (outputBuffer) OutputBuffer(buffer, size);
     }
     ~BufferContainer() {
-        std::cout << "Freeing buffer" << (void *)buffer << std::endl;
-        cudaFree(buffer);
-        cudaFree(outputBuffer);
+        CHECK_CUDA_ERROR(cudaFree(buffer));
+        CHECK_CUDA_ERROR(cudaFree(outputBuffer));
     }
 
     OutputBuffer *getOutputBuffer() { return outputBuffer; }
 
     std::vector<uint8_t> getData() {
-        std::cout << "Retrieving data from buffer" << (void *)buffer
-                  << std::endl;
-        // Copy the data from the device to the host
-        OutputBuffer outputBufferHost(nullptr, 0);
-        cudaMemcpy(&outputBufferHost, outputBuffer, sizeof(OutputBuffer),
-                   cudaMemcpyDeviceToHost);
-
-        std::vector<uint8_t> hostBuffer(outputBufferHost.getOffset());
-        cudaMemcpy(hostBuffer.data(), buffer, outputBufferHost.getOffset(),
+        std::vector<uint8_t> hostBuffer(outputBuffer->getOffset());
+        cudaMemcpy(hostBuffer.data(), buffer, outputBuffer->getOffset(),
                    cudaMemcpyDeviceToHost);
         return hostBuffer;
     }

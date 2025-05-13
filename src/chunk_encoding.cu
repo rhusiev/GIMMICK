@@ -1,13 +1,14 @@
-#include "./blocks.hpp"
 #include "./chunk_encoding.hpp"
 #include "./nbt.hpp"
 #include <cuda_runtime.h>
 #include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/tuple.h>
 
-// Define a global CUDA kernel for subchunk encoding
-
-__global__ void chunk_writer(OutputBuffer *buf, ChunkSmol *chunk_smols,
-                             int32_t x, int32_t z) {
+// Full device function for chunk encoding
+__device__ void write_chunk_device(OutputBuffer *buf, ChunkSmol *chunk_smol, int32_t x, int32_t z) {
     NBTSerializer serializer(buf);
     serializer.writeTagHeader("", NBT_TagType::TAG_Compound);
 
@@ -36,9 +37,8 @@ __global__ void chunk_writer(OutputBuffer *buf, ChunkSmol *chunk_smols,
             serializer.writeTagHeader("block_states",
                                       NBT_TagType::TAG_Compound);
 
-            // Launch the encoding kernel with a single thread
-            // Assuming chunk.chunk_smols[y + 4] is already on the device
-            chunk_smols[y + 4].encodeBlockData(&serializer);
+            // Serialize the block states from the ChunkSmol
+            chunk_smol[y + 4].serializeBlockStates(&serializer);
 
             serializer.writeTagEnd();
         }
@@ -49,6 +49,38 @@ __global__ void chunk_writer(OutputBuffer *buf, ChunkSmol *chunk_smols,
     serializer.writeTagEnd();
 }
 
-void write_chunk(OutputBuffer *buf, Chunk &chunk) {
-    chunk_writer<<<1, 1>>>(buf, chunk.chunk_smols, chunk.x, chunk.z);
+// Host function to write multiple chunks in parallel using Thrust
+void write_chunks_parallel(std::vector<OutputBuffer*> &buffers, std::vector<Chunk> &chunks) {
+    if (buffers.size() != chunks.size() || buffers.empty()) return;
+    
+    // Create device vectors to hold our data
+    thrust::device_vector<OutputBuffer*> d_buffers(buffers.size());
+    thrust::device_vector<ChunkSmol*> d_chunk_smols(chunks.size());
+    thrust::device_vector<int32_t> d_xs(chunks.size());
+    thrust::device_vector<int32_t> d_zs(chunks.size());
+    
+    // Copy data to device
+    for (size_t i = 0; i < chunks.size(); i++) {
+        d_buffers[i] = buffers[i];
+        d_chunk_smols[i] = chunks[i].chunk_smols.get();
+        d_xs[i] = chunks[i].x;
+        d_zs[i] = chunks[i].z;
+    }
+    
+    // Use a simple lambda instead of a functor or kernel
+    thrust::for_each(
+        thrust::device,
+        thrust::make_zip_iterator(thrust::make_tuple(
+            d_buffers.begin(), d_chunk_smols.begin(), d_xs.begin(), d_zs.begin()
+        )),
+        thrust::make_zip_iterator(thrust::make_tuple(
+            d_buffers.end(), d_chunk_smols.end(), d_xs.end(), d_zs.end()
+        )),
+        [=] __device__ (const thrust::tuple<OutputBuffer*, ChunkSmol*, int32_t, int32_t>& t) {
+            write_chunk_device(thrust::get<0>(t), thrust::get<1>(t), thrust::get<2>(t), thrust::get<3>(t));
+        }
+    );
+    
+    // Ensure all kernels are complete
+    cudaDeviceSynchronize();
 }
