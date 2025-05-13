@@ -4,6 +4,7 @@
 #include <cmath>
 #include <functional>
 #include <vector>
+#include <tuple>
 
 struct Coord {
     int x, y;
@@ -27,10 +28,7 @@ struct Coord {
     bool operator!=(const Coord &other) const { return !(*this == other); }
 
     bool operator<(const Coord &other) const {
-        if (x != other.x) {
-            return x < other.x;
-        }
-        return y < other.y;
+        return std::tie(x, y) < std::tie(other.x, other.y);
     }
 
     bool operator>(const Coord &other) const { return other < (*this); }
@@ -40,7 +38,7 @@ struct CoordHash {
     std::size_t operator()(const Coord &c) const {
         std::size_t h1 = std::hash<int>{}(c.x);
         std::size_t h2 = std::hash<int>{}(c.y);
-        return h1 ^ (h2 << 1);
+        return h1 ^ (h2 << 1); // Combine hashes
     }
 };
 
@@ -48,25 +46,19 @@ struct House {
     Coord corner1;
     Coord corner2;
     bool orientation;
+    int terrain_height;
 
-    House(Coord c1, Coord c2, bool orient)
-        : corner1(c1), corner2(c2), orientation(orient) {}
+    House(Coord c1, Coord c2, bool orient, int height = 0)
+        : corner1(c1), corner2(c2), orientation(orient), terrain_height(height) {}
 
     bool operator==(const House &other) const {
-        return corner1 == other.corner1 && corner2 == other.corner2 &&
-               orientation == other.orientation;
+        return std::tie(corner1, corner2, orientation, terrain_height) ==
+               std::tie(other.corner1, other.corner2, other.orientation, other.terrain_height);
     }
 
     bool operator<(const House &other) const {
-        if (corner1 < other.corner1)
-            return true;
-        if (other.corner1 < corner1)
-            return false; // handles !(a<b) && !(b<a)
-        if (corner2 < other.corner2)
-            return true;
-        if (other.corner2 < corner2)
-            return false;
-        return orientation < other.orientation;
+        return std::tie(corner1, corner2, orientation, terrain_height) <
+               std::tie(other.corner1, other.corner2, other.orientation, other.terrain_height);
     }
 };
 
@@ -75,7 +67,8 @@ struct HouseHash {
         std::size_t h1 = CoordHash{}(h.corner1);
         std::size_t h2 = CoordHash{}(h.corner2);
         std::size_t h3 = std::hash<bool>{}(h.orientation);
-        return h1 ^ (h2 << 1) ^ (h3 << 2);
+        std::size_t h4 = std::hash<int>{}(h.terrain_height);
+        return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3);
     }
 };
 
