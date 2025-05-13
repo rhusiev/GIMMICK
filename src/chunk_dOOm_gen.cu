@@ -91,6 +91,9 @@ Chunk ChunkGenerator::generate(int32_t x, int32_t z) {
     return chunk;
 }
 
+inline constexpr char key_snowy[] = "snowy";
+inline constexpr char val_true[] = "true";
+
 void ChunkGenerator::generateBaseStructure(Chunk &chunk,
                                            const thrust::device_vector<float> &d_heights) {
     // Copy heights to host for further processing
@@ -120,7 +123,7 @@ void ChunkGenerator::generateBaseStructure(Chunk &chunk,
 
                     if (height > absolute_y) {
                         chunk_smol.setBlock(i_y, i_z, 15 - i_x,
-                                            make_block("minecraft:stone"));
+                                            make_block<make_kv(key_snowy, val_true)>("minecraft:grass"));
                     } else {
                         chunk_smol.setBlock(i_y, i_z, 15 - i_x,
                                             make_block("minecraft:air"));

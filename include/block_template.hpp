@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <type_traits>
 
 #include "./nbt.hpp"
 
@@ -15,25 +16,61 @@ template <size_t N> class Block {
     constexpr size_t getSize() const { return N; }
 };
 
+template <size_t key_str_len, size_t val_str_len> class KeyValue {
+  public:
+    const char (&key)[key_str_len];
+    const char (&val)[val_str_len];
+    constexpr size_t size() const { return key_str_len + val_str_len - 2; }
+};
+
+template <size_t N, size_t M>
+constexpr KeyValue<N, M> make_kv(const char (&k)[N], const char (&v)[M]) {
+    return {k, v};
+}
+
+template <typename T> struct is_key_value : std::false_type {};
+
+template <size_t K, size_t V>
+struct is_key_value<KeyValue<K, V>> : std::true_type {};
+
 template <typename... Args>
-constexpr size_t compute_size(size_t name_len, const Args &...args) {
+constexpr size_t compute_size(Args... args) {
     constexpr size_t n = sizeof...(args);
-    static_assert(n % 2 == 0, "Number of properties must be even");
-    static_assert(n == 0, "Properties are not supported yet");
+    /*static_assert(n == 0, "Properties are not supported yet");*/
+    static_assert((... && is_key_value<std::decay_t<Args>>::value),
+                  "All args must be KeyValue<K, V>");
 
-    size_t total = name_len + 2; // length -> string
+    size_t total = 0;
 
-    // total += 3; // compound tag + length
-    // total += 10; // "Properties"
-    // total += 5 + key + value;
-    // total += 1; // end tag
+    if constexpr (n > 0) {
+        total += 3;  // compound tag + length
+        total += 10; // "Properties"
+        size_t info_about_property = 5;
+        size_t args_sizes = (args.size() + ...);
+        total += info_about_property * n + args_sizes;
+        total += 1; // end tag
+    }
 
     return total;
 }
 
-template <size_t name_len>
+template <typename... Args>
+constexpr void add_properties(NBTSerializer &serializer, Args... args) {
+    static_assert((... && is_key_value<std::decay_t<Args>>::value),
+                  "All propertyArgs must be KeyValue<K, V>");
+    (..., (serializer.writeTagHeader(args.key, NBT_TagType::TAG_String),
+           serializer.writeString(args.val)));
+}
+
+template <auto... propertyArgs, size_t name_len>
 constexpr auto make_block(const char (&blockName)[name_len]) {
-    constexpr size_t N = compute_size(name_len - 1); // TODO add properties
+    static_assert(
+        (... &&
+         is_key_value<std::remove_cvref_t<decltype(propertyArgs)>>::value),
+        "All propertyArgs must be KeyValue<K,V>");
+    constexpr size_t property_size =
+        compute_size(propertyArgs...);
+    constexpr size_t N = name_len + 2 + property_size; // length -> string
 
     OutputBuffer buffer(N);
     NBTSerializer serializer(&buffer);
@@ -42,13 +79,9 @@ constexpr auto make_block(const char (&blockName)[name_len]) {
     serializer.writeString(blockName);
 
     // Add properties if there are any
-    if constexpr (false) {
-        // static_assert(sizeof...(propertyArgs) % 2 == 0, "Properties must be
-        // key-value pairs");
-
+    if constexpr (property_size > 0) {
         serializer.writeTagHeader("Properties", NBT_TagType::TAG_Compound);
-        // TODO create
-        // add_properties(serializer, propertyArgs...);
+        add_properties(serializer, propertyArgs...);
         serializer.writeTagEnd();
     }
 
