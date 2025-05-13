@@ -45,28 +45,26 @@ __device__ FlatInfo ChunkGenerator::get_flat_info(int32_t seed, int32_t x,
 }
 
 // And here we use them
-__device__ void ChunkGenerator::generateSmolChunk(ChunkSmol *chunk_smol,
-                                                  int32_t seed, int32_t chunk_x,
-                                                  int32_t chunk_y,
-                                                  int32_t chunk_z,
-                                                  const FlatInfo *flat_info) {
+__device__ void
+ChunkGenerator::generateSmolChunk(ChunkSmol *chunk_smol, int32_t seed,
+                                  int32_t chunk_x, int32_t chunk_y,
+                                  int32_t chunk_z, const FlatInfo *flat_info,
+                                  const VolumetricInfo *volumetric_info) {
     for (uint32_t local_y = 0; local_y < 16; local_y++) {
         // Process all 4096 blocks in this subchunk
         for (uint32_t local_z = 0; local_z < 16; local_z++) {
             for (uint32_t local_x = 0; local_x < 16; local_x++) {
                 int32_t absolute_y = local_y + chunk_y;
                 FlatInfo flat = flat_info[local_z * 16 + local_x];
+                VolumetricInfo volumetric =
+                    volumetric_info[local_y * 16 * 16 + local_z * 16 + local_x];
 
                 auto threshold = std::clamp<float>(absolute_y - flat.height,
                                                    -flat.shatter * 10.f,
                                                    flat.shatter * 10.f) *
                                  0.1f / flat.shatter;
-                auto density = noise(seed + 4, chunk_x + local_x, absolute_y,
-                                     chunk_z + local_z, 0.1f, 2);
-                bool cave = cave_noise(seed + 5, chunk_x + local_x, absolute_y,
-                                       chunk_z + local_z) < -0.2f;
 
-                if (density > threshold && !cave) {
+                if (volumetric.density > threshold && !volumetric.cave) {
                     chunk_smol->setBlock(local_y, local_z, 15 - local_x,
                                          make_block("minecraft:stone"));
                 } else {
@@ -99,9 +97,6 @@ __device__ void ChunkGenerator::replaceSurface(ChunkWrapper &chunk,
 
 std::vector<Chunk> ChunkGenerator::generate_all(int32_t region_x,
                                                 int32_t region_z) {
-    std::vector<Chunk> chunks;
-    chunks.reserve(32 * 32);
-
     // Storing all 2d noise etc.
     thrust::device_vector<FlatInfo> flats(16 * 16 * 32 * 32);
 
@@ -126,7 +121,43 @@ std::vector<Chunk> ChunkGenerator::generate_all(int32_t region_x,
             return get_flat_info(seed, chunk_x + local_x, chunk_z + local_z);
         });
 
+    thrust::device_vector<VolumetricInfo> volumetrics(16 * 16 * 32 * 32 * 24 *
+                                                      16);
+
+    thrust::transform(
+        thrust::counting_iterator<uint32_t>(0),
+        thrust::counting_iterator<uint32_t>(16 * 16 * 32 * 32 * 24 * 16),
+        volumetrics.begin(),
+        [seed = seed, region_x, region_z] __device__(uint32_t idx) {
+            // 16 x 16 x 16 blocks in subchunk
+            // 24 subchunks in chunk
+            // 32 x 32 chunks in region
+
+            uint32_t local_x = idx % 16;
+            uint32_t local_z = (idx / 16) % 16;
+            uint32_t local_y = (idx / 16 / 16) % 16;
+            uint32_t subchunk_id = (idx / (16 * 16 * 16)) % 24;
+            uint32_t cell_id = (idx / (16 * 16 * 16)) % 24;
+
+            int32_t cell_id_x = cell_id / 32;
+            int32_t cell_id_z = cell_id % 32;
+
+            int32_t chunk_x = (region_x * 32 + cell_id_x) * 16;
+            int32_t chunk_z = (region_z * 32 + cell_id_z) * 16;
+
+            int32_t x = chunk_x + local_x;
+            int32_t y = subchunk_id * 16 - 64 + local_y;
+            int32_t z = chunk_z + local_z;
+
+            auto density = noise(seed + 4, x, y, z, 0.1f, 2);
+            bool cave = cave_noise(seed + 5, x, y, z) < -0.2f;
+
+            return VolumetricInfo{density, cave};
+        });
+
     thrust::device_vector<ChunkSmol *> chunk_smols(32 * 32);
+    std::vector<Chunk> chunks;
+    chunks.reserve(32 * 32);
 
     for (auto cell_id = 0; cell_id < 32 * 32; cell_id++) {
         int32_t cell_id_x = cell_id / 32;
@@ -141,11 +172,13 @@ std::vector<Chunk> ChunkGenerator::generate_all(int32_t region_x,
 
     ChunkSmol **all_chunks = thrust::raw_pointer_cast(chunk_smols.data());
     FlatInfo *all_flats = thrust::raw_pointer_cast(flats.data());
+    VolumetricInfo *all_volumetrics =
+        thrust::raw_pointer_cast(volumetrics.data());
 
     thrust::for_each(thrust::counting_iterator<uint32_t>(0),
                      thrust::counting_iterator<uint32_t>(24 * 32 * 32),
-                     [seed = seed, region_x, region_z, all_chunks,
-                      all_flats] __device__(const uint32_t &smol_idx) {
+                     [seed = seed, region_x, region_z, all_chunks, all_flats,
+                      all_volumetrics] __device__(const uint32_t &smol_idx) {
                          const uint32_t i_ch = smol_idx % 24;
                          const uint32_t cell_id = smol_idx / 24;
 
@@ -161,9 +194,10 @@ std::vector<Chunk> ChunkGenerator::generate_all(int32_t region_x,
                          int32_t chunk_z = (region_z * 32 + cell_id_z) * 16;
 
                          // Generate this smol chunk
-                         generateSmolChunk(raw_chunks + i_ch, seed, chunk_x,
-                                           i_ch * 16, chunk_z,
-                                           all_flats + cell_id * 16 * 16);
+                         generateSmolChunk(
+                             raw_chunks + i_ch, seed, chunk_x, i_ch * 16,
+                             chunk_z, all_flats + cell_id * 16 * 16,
+                             all_volumetrics + smol_idx * 16 * 16 * 16);
                      });
 
     cudaDeviceSynchronize();

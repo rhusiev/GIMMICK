@@ -10,6 +10,12 @@ class FlatInfo {
     float shatter;
 };
 
+class VolumetricInfo {
+  public:
+    float density;
+    bool cave;
+};
+
 class ChunkWrapper {
   private:
     ChunkSmol *smols;
@@ -59,10 +65,11 @@ class ChunkGenerator {
 
     __device__ static FlatInfo get_flat_info(int32_t seed, int32_t x,
                                              int32_t z);
-    __device__ static void generateSmolChunk(ChunkSmol *chunk_smol,
-                                             int32_t seed, int32_t chunk_x,
-                                             int32_t chunk_y, int32_t chunk_z,
-                                             const FlatInfo *flat_info);
+    __device__ static void
+    generateSmolChunk(ChunkSmol *chunk_smol, int32_t seed, int32_t chunk_x,
+                      int32_t chunk_y, int32_t chunk_z,
+                      const FlatInfo *flat_info,
+                      const VolumetricInfo *volumetric_info);
     __device__ static void replaceSurface(ChunkWrapper &chunk, int32_t seed);
 };
 
