@@ -38,42 +38,20 @@ Chunk ChunkGenerator::generate(int32_t x, int32_t z) {
     Chunk chunk{x, z};
 
     // Create a device vector to store heights
-    std::cout << "Creating device vector for heights" << std::endl;
-    try {
-        thrust::device_vector<float> heights(16 * 16);
-        std::cout << "Device vector created" << std::endl;
+    thrust::device_vector<float> heights(16 * 16);
 
-        // Use a lambda to map from index to (x,z) and call getBaseTerrainHeight
-        thrust::transform(thrust::counting_iterator<uint32_t>(0),
-                          thrust::counting_iterator<uint32_t>(16 * 16),
-                          heights.begin(),
-                          [this, chunk_x = chunk.x,
-                           chunk_z = chunk.z] __device__(uint32_t idx) {
-                              int32_t local_x = idx % 16;
-                              int32_t local_z = idx / 16;
-                              return getBaseTerrainHeight(chunk_x + local_x,
-                                                          chunk_z + local_z);
-                          });
+    // Use a lambda to map from index to (x,z) and call getBaseTerrainHeight
+    thrust::transform(
+        thrust::counting_iterator<uint32_t>(0),
+        thrust::counting_iterator<uint32_t>(16 * 16), heights.begin(),
+        [this, chunk_x = chunk.x, chunk_z = chunk.z] __device__(uint32_t idx) {
+            int32_t local_x = idx % 16;
+            int32_t local_z = idx / 16;
+            return getBaseTerrainHeight(chunk_x + local_x, chunk_z + local_z);
+        });
 
-        std::cout << "Heights generated" << std::endl;
-
-        // Apply only basic stone generation
-        generateBaseStructure(chunk, heights);
-    } catch (const thrust::system::detail::bad_alloc &e) {
-        std::cerr << "Thrust allocation error: " << e.what() << std::endl;
-        // Get CUDA error information
-        cudaError_t err = cudaGetLastError();
-        std::cerr << "CUDA error: " << cudaGetErrorString(err) << std::endl;
-
-        // Print memory info
-        size_t free, total;
-        CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
-        std::cerr << "GPU memory - Free: " << free / 1024 / 1024
-                  << "MB, Total: " << total / 1024 / 1024 << "MB" << std::endl;
-
-        // Rethrow or handle gracefully
-        throw;
-    }
+    // Apply only basic stone generation
+    generateBaseStructure(chunk, heights);
 
     return chunk;
 }
@@ -94,11 +72,11 @@ __device__ void generateSmolChunk(ChunkSmol *chunk_smol, int32_t i_ch,
 
                 // Set the appropriate block based on height
                 if (height > absolute_y) {
-                    auto block = make_block("minecraft:stone");
-                    chunk_smol->setBlock(i_y, i_z, 15 - i_x, block);
+                    chunk_smol->setBlock(i_y, i_z, 15 - i_x,
+                                         make_block("minecraft:stone"));
                 } else {
-                    // chunk_smol->setBlock(i_y, i_z, 15 - i_x,
-                    //                      make_block("minecraft:air"));
+                    chunk_smol->setBlock(i_y, i_z, 15 - i_x,
+                                         make_block("minecraft:air"));
                 }
             }
         }
@@ -109,9 +87,7 @@ void ChunkGenerator::generateBaseStructure(
     Chunk &chunk, const thrust::device_vector<float> &d_heights) {
     // Get raw pointers for use in the device code
     ChunkSmol *raw_chunks = chunk.chunk_smols;
-    std::cout << "raw_chunks: " << (void *)raw_chunks << std::endl;
     const float *raw_heights = thrust::raw_pointer_cast(d_heights.data());
-    std::cout << "raw_heights: " << (void *)raw_heights << std::endl;
 
     // Process all 24 smol chunks in parallel using thrust::for_each with lambda
     thrust::for_each(

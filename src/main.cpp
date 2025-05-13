@@ -9,15 +9,11 @@
 void sample_write_chunk(int region_x, int region_z) {
     McAnvilWriter writer;
 
-    for (auto x = region_x * 32; x < region_x * 32 + 4; x++) {
-        for (auto z = region_z * 32; z < region_z * 32 + 4; z++) {
-            std::cout << "Writing chunk " << x << ", " << z << std::endl;
+    for (auto x = region_x * 32; x < region_x * 32 + 32; x++) {
+        for (auto z = region_z * 32; z < region_z * 32 + 32; z++) {
             auto buffer = writer.getBufferFor(x, z);
-            std::cout << "Buffer retrieved" << std::endl;
             Chunk chunk = generate_chunk(x * 16, z * 16);
-            std::cout << "Chunk generated" << std::endl;
             write_chunk(buffer, chunk);
-            std::cout << "Chunk written" << std::endl;
         }
     }
 
