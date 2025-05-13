@@ -20,33 +20,31 @@ target_sources(${PROJECT_NAME}
     ${SRC_FILES}
 )
 
-add_library(simplex_noise STATIC
-    libraries/simplex_noise/SimplexNoise.cu
-)
-target_include_directories(simplex_noise PUBLIC
-    libraries/simplex_noise
+add_library(cuda_noise INTERFACE)
+target_include_directories(cuda_noise INTERFACE
+    libraries/cuda_noise
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
 find_package(ZLIB REQUIRED)
-target_link_libraries(${PROJECT_NAME} ZLIB::ZLIB simplex_noise)
+target_link_libraries(${PROJECT_NAME} ZLIB::ZLIB cuda_noise)
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set_target_properties(${PROJECT_NAME} PROPERTIES
-        CXX_STANDARD 20
+        CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
-        CUDA_STANDARD 20
+        CUDA_STANDARD 23
         CUDA_STANDARD_REQUIRED ON
         CUDA_ARCHITECTURES all
         COMPILE_FLAGS "-xcuda --cuda-path=/usr/local/cuda"
     )
 else()
     set_target_properties(${PROJECT_NAME} PROPERTIES
-        CXX_STANDARD 20
+        CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
-        CUDA_STANDARD 20
+        CUDA_STANDARD 23
         CUDA_STANDARD_REQUIRED ON
         CUDA_ARCHITECTURES all
     )

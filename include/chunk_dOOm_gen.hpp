@@ -1,7 +1,6 @@
 #ifndef INCLUDE_CHUNK_DOOM_GEN_HPP_
 #define INCLUDE_CHUNK_DOOM_GEN_HPP_
 
-#include "./SimplexNoise.hpp"
 #include "./block_template.hpp"
 #include "./block_registry.hpp"
 #include "./nbt.hpp"
@@ -10,6 +9,7 @@
 #include <memory>
 #include <vector>
 #include <array>
+#include <cuda_runtime.h>
 
 /*#define DEBUG_HEIGHTS*/
 
@@ -53,9 +53,6 @@ class Chunk {
     int32_t x;
     int32_t z;
     ChunkSmol chunk_smols[24]; // TODO: change to private with methods?
-#ifdef DEBUG_HEIGHTS
-    int32_t debug_heights[16][16];
-#endif
 
     Chunk(int32_t x, int32_t z);
 };
@@ -69,7 +66,7 @@ class ChunkGenerator {
     void generateBaseStructure(Chunk &chunk, const float heights[16][16]);
     
     // Density/noise function
-    float getBaseTerrainHeight(float x, float z);
+    __device__ float getBaseTerrainHeight(float x, float z);
 };
 
 Chunk generate_chunk(int32_t x, int32_t z);

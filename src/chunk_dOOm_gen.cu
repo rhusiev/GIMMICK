@@ -1,7 +1,13 @@
 #include "./chunk_dOOm_gen.hpp"
-#include "./SimplexNoise.hpp"
+#include "./cuda_noise.cuh"
 #include <algorithm>
 #include <cstdlib>
+#include <cuda_runtime.h>
+#include <thrust/device_vector.h>
+#include <thrust/functional.h>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 ChunkSmol::ChunkSmol() {
     for (int32_t y = 0; y < 16; y++) {
@@ -66,15 +72,27 @@ Chunk::Chunk(int32_t x, int32_t z) : x(x), z(z) {}
 Chunk ChunkGenerator::generate(int32_t x, int32_t z) {
     Chunk chunk{x, z};
 
-    // Pre-calculate heights for the entire chunk
+    // Create a device vector to store heights
+    thrust::device_vector<float> d_heights(16 * 16);
+
+    // Use a lambda to map from index to (x,z) and call getBaseTerrainHeight
+    thrust::transform(
+        thrust::counting_iterator<uint32_t>(0),
+        thrust::counting_iterator<uint32_t>(16 * 16), d_heights.begin(),
+        [this, chunk_x = chunk.x, chunk_z = chunk.z] __device__(uint32_t idx) {
+            int32_t local_x = idx % 16;
+            int32_t local_z = idx / 16;
+            return getBaseTerrainHeight(chunk_x + local_x, chunk_z + local_z);
+        });
+
+    // Copy heights to host for further processing
+    thrust::host_vector<float> h_heights = d_heights;
+
+    // Convert to 2D array format for use in generateBaseStructure
     float heights[16][16];
     for (int32_t i_x = 0; i_x < 16; i_x++) {
         for (int32_t i_z = 0; i_z < 16; i_z++) {
-            float height = getBaseTerrainHeight(chunk.x + i_x, chunk.z + i_z);
-            heights[i_x][i_z] = height;
-#ifdef DEBUG_HEIGHTS
-            chunk.debug_heights[i_x][i_z] = height;
-#endif
+            heights[i_x][i_z] = h_heights[i_z * 16 + i_x];
         }
     }
 
@@ -113,8 +131,9 @@ void ChunkGenerator::generateBaseStructure(Chunk &chunk,
     }
 }
 
-float ChunkGenerator::getBaseTerrainHeight(float x, float z) {
-    auto noise = SimplexNoise(0.01f).fractal(3, x, z);
+__device__ float ChunkGenerator::getBaseTerrainHeight(float x, float z) {
+    auto noise = cudaNoise::repeaterSimplex(make_float3(x, 0.f, z), 0.1f, 0, 3,
+                                            2.0f, 0.5f);
 
     // Simple height calculation: noise range -1 to 1, convert to 32-160 range
     auto height = (noise + 1) * 64 + 32; // 32 - 160
