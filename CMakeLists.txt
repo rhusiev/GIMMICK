@@ -21,7 +21,7 @@ target_sources(${PROJECT_NAME}
 )
 
 add_library(simplex_noise STATIC
-    libraries/simplex_noise/SimplexNoise.cpp
+    libraries/simplex_noise/SimplexNoise.cu
 )
 target_include_directories(simplex_noise PUBLIC
     libraries/simplex_noise

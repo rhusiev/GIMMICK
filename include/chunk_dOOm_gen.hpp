@@ -1,7 +1,7 @@
 #ifndef INCLUDE_CHUNK_DOOM_GEN_HPP_
 #define INCLUDE_CHUNK_DOOM_GEN_HPP_
 
-#include "../libraries/simplex_noise/SimplexNoise.h"
+#include "./SimplexNoise.hpp"
 #include "./block_template.hpp"
 #include "./block_registry.hpp"
 #include "./nbt.hpp"

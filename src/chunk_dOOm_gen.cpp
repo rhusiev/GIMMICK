@@ -1,5 +1,5 @@
 #include "./chunk_dOOm_gen.hpp"
-#include "./SimplexNoise.h"
+#include "./SimplexNoise.hpp"
 #include <algorithm>
 #include <cstdlib>
 
@@ -17,45 +17,46 @@ uint8_t ChunkSmol::getBlockId(int32_t y, int32_t z, int32_t x) const {
     return block_ids[y][z][x];
 }
 
-void ChunkSmol::serializeBlockStates(NBTSerializer* serializer) const {
+void ChunkSmol::serializeBlockStates(NBTSerializer *serializer) const {
     // Serialize the palette directly from registry
     registry.serializePalette(serializer);
-    
+
     // Get bit count required for encoding and encode the block data
     encodeBlockData(serializer);
 }
 
-void ChunkSmol::encodeBlockData(NBTSerializer* serializer) const {
+void ChunkSmol::encodeBlockData(NBTSerializer *serializer) const {
     // First determine the number of bits needed per block
     uint32_t n_bits = 4; // Minimum 4 bits as per Minecraft's requirements
-    
+
     // Skip data section entirely if palette is empty or only has air
     if (n_bits == 0) {
         return;
     }
-    
+
     uint32_t blocks_per_long = 64 / n_bits;
     uint32_t longs_needed = 4096 / blocks_per_long;
-    
+
     serializer->writeTagHeader("data", NBT_TagType::TAG_Long_Array);
     serializer->writeInt(longs_needed);
-    
+
     for (uint32_t i = 0; i < longs_needed; i++) {
         uint32_t first_block = i * blocks_per_long;
         uint64_t packed_data = 0;
-        
-        for (uint32_t j = 0; j < blocks_per_long && (first_block + j) < 4096; j++) {
+
+        for (uint32_t j = 0; j < blocks_per_long && (first_block + j) < 4096;
+             j++) {
             uint32_t block_index = first_block + j;
             uint32_t y = block_index / 256;
             uint32_t z = (block_index % 256) / 16;
             uint32_t x = block_index % 16;
-            
+
             uint64_t block_id = getBlockId(y, z, x);
-            
+
             uint32_t shift = 64 - ((j + 1) * n_bits);
             packed_data |= (block_id << shift);
         }
-        
+
         serializer->writeLong(packed_data);
     }
 }
@@ -100,9 +101,11 @@ void ChunkGenerator::generateBaseStructure(Chunk &chunk,
                     float height = heights[i_x][i_z];
 
                     if (height > absolute_y) {
-                        chunk_smol.setBlock(i_y, i_z, 15 - i_x, make_block("minecraft:stone"));
+                        chunk_smol.setBlock(i_y, i_z, 15 - i_x,
+                                            make_block("minecraft:stone"));
                     } else {
-                        chunk_smol.setBlock(i_y, i_z, 15 - i_x, make_block("minecraft:air"));
+                        chunk_smol.setBlock(i_y, i_z, 15 - i_x,
+                                            make_block("minecraft:air"));
                     }
                 }
             }
@@ -112,10 +115,10 @@ void ChunkGenerator::generateBaseStructure(Chunk &chunk,
 
 float ChunkGenerator::getBaseTerrainHeight(float x, float z) {
     auto noise = SimplexNoise(0.01f).fractal(3, x, z);
-    
+
     // Simple height calculation: noise range -1 to 1, convert to 32-160 range
     auto height = (noise + 1) * 64 + 32; // 32 - 160
-    
+
     return std::clamp<double>(height, 0.0, 320.0);
 }
 
