@@ -9,6 +9,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
+
 ChunkSmol::ChunkSmol() {
     for (int32_t y = 0; y < 16; y++) {
         for (int32_t z = 0; z < 16; z++) {
@@ -111,10 +112,8 @@ void ChunkGenerator::generateBaseStructure(Chunk &chunk,
                     float height = h_heights[i_z * 16 + i_x];
 
                     if (height > absolute_y) {
-                        static constexpr char key_snowy[] = "snowy";
-                        static constexpr char val_true[] = "true";
                         chunk_smol.setBlock(i_y, i_z, 15 - i_x,
-                                            make_block<make_kv(key_snowy, val_true)>("minecraft:grass_block"));
+                                            make_block<MAKE_KV("snowy", "true")>("minecraft:grass_block"));
                     } else {
                         chunk_smol.setBlock(i_y, i_z, 15 - i_x,
                                             make_block("minecraft:air"));

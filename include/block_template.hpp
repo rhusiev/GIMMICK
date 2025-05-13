@@ -27,6 +27,14 @@ template <size_t N, size_t M>
 constexpr KeyValue<N, M> make_kv(const char (&k)[N], const char (&v)[M]) {
     return {k, v};
 }
+#ifndef MAKE_KV
+#define MAKE_KV(key, value) \
+    [&]() { \
+        static constexpr char _k_##__LINE__[] = key; \
+        static constexpr char _v_##__LINE__[] = value; \
+        return make_kv(_k_##__LINE__, _v_##__LINE__); \
+    }()
+#endif
 
 template <typename T> struct is_key_value : std::false_type {};
 
