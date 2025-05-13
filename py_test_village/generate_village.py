@@ -30,4 +30,4 @@ if __name__ == "__main__":
             houses.add(new)
             probability *= (probability * 0.995) ** 0.07
 
-    draw_village(houses, path_width=4)
+    draw_village(houses)
