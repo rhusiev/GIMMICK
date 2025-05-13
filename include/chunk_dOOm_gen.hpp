@@ -33,15 +33,18 @@ class ChunkSmol {
 
   public:
     template <typename Block>
-    __device__ uint8_t setBlock(int32_t y, int32_t z, int32_t x,
-                                const Block &block) {
+    __device__ void setBlock(int32_t y, int32_t z, int32_t x,
+                             const Block &block) {
         uint8_t id = registry.addBlock(block);
         block_ids[y][z][x] = id;
-        return id;
     }
 
-    __device__ void setBlock(int32_t y, int32_t z, int32_t x, uint8_t id) {
-        block_ids[y][z][x] = id;
+    template <typename Block>
+    __device__ bool isSameBlock(int32_t y, int32_t z, int32_t x,
+                                const Block &block) {
+        uint8_t our_id = block_ids[y][z][x];
+        uint8_t their_id = registry.findBlockByString(block);
+        return our_id == their_id;
     }
 
     __device__ uint8_t getBlockId(int32_t y, int32_t z, int32_t x) const {

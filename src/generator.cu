@@ -1,6 +1,7 @@
 #include "./chunk_dOOm_gen.hpp"
 #include "./cuda_noise.cuh"
 #include "./generator.hpp"
+#include "block_template.hpp"
 #include <algorithm>
 #include <cstdlib>
 #include <cuda_runtime.h>
@@ -77,6 +78,25 @@ __device__ void ChunkGenerator::generateSmolChunk(ChunkSmol *chunk_smol,
     }
 }
 
+__device__ void ChunkGenerator::replaceSurface(ChunkWrapper &chunk,
+                                               int32_t seed) {
+    for (int32_t local_z = 0; local_z < 16; local_z++) {
+        for (int32_t local_x = 0; local_x < 16; local_x++) {
+            FlatInfo info = chunk.get_flat_info(local_x, local_z);
+            float starting_height = info.height + 15;
+
+            for (int32_t local_y = starting_height; local_y > 32; local_y--) {
+                if (chunk.isSameBlock(local_y, local_z, 15 - local_x,
+                                      make_block("minecraft:stone"))) {
+                    chunk.setBlock(local_y, local_z, 15 - local_x,
+                                   make_block("minecraft:grass_block"));
+                    break;
+                }
+            }
+        }
+    }
+};
+
 std::vector<Chunk> ChunkGenerator::generate_all(int32_t region_x,
                                                 int32_t region_z) {
     std::vector<Chunk> chunks;
@@ -144,6 +164,18 @@ std::vector<Chunk> ChunkGenerator::generate_all(int32_t region_x,
                          generateSmolChunk(raw_chunks + i_ch, seed, chunk_x,
                                            i_ch * 16, chunk_z,
                                            all_flats + cell_id * 16 * 16);
+                     });
+
+    cudaDeviceSynchronize();
+
+    thrust::for_each(thrust::counting_iterator<uint32_t>(0),
+                     thrust::counting_iterator<uint32_t>(32 * 32),
+                     [seed = seed, region_x, region_z, all_chunks,
+                      all_flats] __device__(const uint32_t &cell_id) {
+                         ChunkSmol *raw_chunks = all_chunks[cell_id];
+                         ChunkWrapper wrapper(raw_chunks,
+                                              all_flats + cell_id * 16 * 16);
+                         replaceSurface(wrapper, seed);
                      });
 
     return chunks;

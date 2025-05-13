@@ -37,13 +37,14 @@ class BlockString {
 
 class BlockRegistry {
   private:
-    static constexpr size_t MAX_SERIALIZED_LENGTH = 32;
+    static constexpr size_t MAX_SERIALIZED_LENGTH = 256;
     static constexpr size_t MAX_BLOCKS = 16; // TODO change
     BlockString serialized_blocks[MAX_BLOCKS];
     uint8_t raw_output[MAX_SERIALIZED_LENGTH];
     OutputBuffer serialization_buffer;
     size_t block_count;
 
+  public:
     template <typename Block>
     __device__ int findBlockByString(const Block &block) const {
         for (size_t i = 0; i < block_count; i++) {
@@ -54,7 +55,6 @@ class BlockRegistry {
         return -1;
     }
 
-  public:
     __device__ BlockRegistry()
         : serialization_buffer(nullptr, 0), block_count(0) {
         serialization_buffer = OutputBuffer(raw_output, MAX_SERIALIZED_LENGTH);
