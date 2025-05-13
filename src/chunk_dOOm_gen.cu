@@ -91,21 +91,10 @@ Chunk ChunkGenerator::generate(int32_t x, int32_t z) {
     return chunk;
 }
 
-inline constexpr char key_snowy[] = "snowy";
-inline constexpr char val_true[] = "true";
-
 void ChunkGenerator::generateBaseStructure(Chunk &chunk,
                                            const thrust::device_vector<float> &d_heights) {
     // Copy heights to host for further processing
     thrust::host_vector<float> h_heights = d_heights;
-
-    // Convert to 2D array format for use in generateBaseStructure
-    float heights[16][16];
-    for (int32_t i_x = 0; i_x < 16; i_x++) {
-        for (int32_t i_z = 0; i_z < 16; i_z++) {
-            heights[i_x][i_z] = h_heights[i_z * 16 + i_x];
-        }
-    }
 
     // Iterate through each sub-chunk (chunk_smol)
     for (int32_t i_ch = 0; i_ch < 24; i_ch++) {
@@ -119,9 +108,11 @@ void ChunkGenerator::generateBaseStructure(Chunk &chunk,
             for (int32_t i_z = 0; i_z < 16; i_z++) {
                 // Then x coordinate
                 for (int32_t i_x = 0; i_x < 16; i_x++) {
-                    float height = heights[i_x][i_z];
+                    float height = h_heights[i_z * 16 + i_x];
 
                     if (height > absolute_y) {
+                        static constexpr char key_snowy[] = "snowy";
+                        static constexpr char val_true[] = "true";
                         chunk_smol.setBlock(i_y, i_z, 15 - i_x,
                                             make_block<make_kv(key_snowy, val_true)>("minecraft:grass_block"));
                     } else {
