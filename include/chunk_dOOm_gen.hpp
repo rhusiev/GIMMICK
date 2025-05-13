@@ -46,33 +46,16 @@ class Chunk {
     Chunk(int32_t x, int32_t z);
 };
 
-// New generation system that uses SimplexNoise directly
+// Simplified generation system that only creates stone terrain
 class ChunkGenerator {
   public:
     Chunk generate(int32_t x, int32_t z);
 
-    // Individual generation stages
+    // Individual generation stages (now only using base structure)
     void generateBaseStructure(Chunk &chunk, const float heights[16][16]);
-    void generateCaves(Chunk &chunk, const float heights[16][16]);
-    void generateSurface(Chunk &chunk, const float heights[16][16]);
-    void generateWater(Chunk &chunk, const float heights[16][16]);
-    void generateTrees(Chunk &chunk, const float heights[16][16]);
-    void generateVegetation(Chunk &chunk, const float heights[16][16],
-                            const bool grass_flags[16][16],
-                            const bool kelp_flags[16][16]);
-
-    // Density/noise functions
-    float getBaseTerrainHeight(float x, float z);
-    bool shouldGenerateCave(float x, float y, float z,
-                            const float heights[16][16]);
-    bool shouldGenerateGrass(float x, float z);
-    bool shouldGenerateKelp(float x, float z);
-    bool shouldGenerateForest(float x, float z);
     
-    // Helper for tree generation
-    bool canPlaceTree(Chunk &chunk, int32_t x, int32_t z, int32_t height, const float heights[16][16]);
-    void placeTree(Chunk &chunk, int32_t x, int32_t z, int32_t height);
-    void setBlockInChunk(Chunk &chunk, int32_t x, int32_t y, int32_t z, BlockType block_type);
+    // Density/noise function
+    float getBaseTerrainHeight(float x, float z);
 };
 
 Chunk generate_chunk(int32_t x, int32_t z);
