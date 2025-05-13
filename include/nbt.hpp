@@ -28,6 +28,9 @@ class NBTSerializer {
 
   public:
     NBTSerializer(OutputBuffer *buf) : buffer(buf) {}
+    
+    // Access the underlying buffer
+    OutputBuffer* getBuffer() const { return buffer; }
 
     template <std::size_t N>
     bool writeTagHeader(const char (&name)[N], NBT_TagType type) {

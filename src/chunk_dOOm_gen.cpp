@@ -3,41 +3,6 @@
 #include <algorithm>
 #include <cstdlib>
 
-Block::Block() : block_type(BlockType::Air) {}
-
-Block::Block(BlockType type) : block_type(type) {}
-
-BlockRegistry::BlockRegistry() {
-    blocks[0] = Block(BlockType::Air);
-    block_count = 1;
-}
-
-uint8_t BlockRegistry::addBlock(const Block& block) {
-    for (size_t i = 0; i < block_count; i++) {
-        if (blocks[i].block_type == block.block_type) {
-            return static_cast<uint8_t>(i);
-        }
-    }
-    
-    if (block_count < MAX_BLOCKS) {
-        blocks[block_count] = block;
-        return static_cast<uint8_t>(block_count++);
-    }
-    
-    return 0;
-}
-
-const Block& BlockRegistry::getBlock(uint8_t id) const {
-    if (id < block_count) {
-        return blocks[id];
-    }
-    return blocks[0];
-}
-
-size_t BlockRegistry::getBlockCount() const {
-    return block_count;
-}
-
 ChunkSmol::ChunkSmol() {
     for (int32_t y = 0; y < 16; y++) {
         for (int32_t z = 0; z < 16; z++) {
@@ -48,19 +13,51 @@ ChunkSmol::ChunkSmol() {
     }
 }
 
-void ChunkSmol::setBlock(int32_t y, int32_t z, int32_t x, const Block& block) {
-    if (y >= 0 && y < 16 && z >= 0 && z < 16 && x >= 0 && x < 16) {
-        uint8_t id = registry.addBlock(block);
-        block_ids[y][z][x] = id;
-    }
-}
-
-const BlockRegistry& ChunkSmol::getRegistry() const {
-    return registry;
-}
-
 uint8_t ChunkSmol::getBlockId(int32_t y, int32_t z, int32_t x) const {
     return block_ids[y][z][x];
+}
+
+void ChunkSmol::serializeBlockStates(NBTSerializer* serializer) const {
+    // Serialize the palette directly from registry
+    registry.serializePalette(serializer);
+    
+    // Get bit count required for encoding and encode the block data
+    encodeBlockData(serializer);
+}
+
+void ChunkSmol::encodeBlockData(NBTSerializer* serializer) const {
+    // First determine the number of bits needed per block
+    uint32_t n_bits = 4; // Minimum 4 bits as per Minecraft's requirements
+    
+    // Skip data section entirely if palette is empty or only has air
+    if (n_bits == 0) {
+        return;
+    }
+    
+    uint32_t blocks_per_long = 64 / n_bits;
+    uint32_t longs_needed = 4096 / blocks_per_long;
+    
+    serializer->writeTagHeader("data", NBT_TagType::TAG_Long_Array);
+    serializer->writeInt(longs_needed);
+    
+    for (uint32_t i = 0; i < longs_needed; i++) {
+        uint32_t first_block = i * blocks_per_long;
+        uint64_t packed_data = 0;
+        
+        for (uint32_t j = 0; j < blocks_per_long && (first_block + j) < 4096; j++) {
+            uint32_t block_index = first_block + j;
+            uint32_t y = block_index / 256;
+            uint32_t z = (block_index % 256) / 16;
+            uint32_t x = block_index % 16;
+            
+            uint64_t block_id = getBlockId(y, z, x);
+            
+            uint32_t shift = 64 - ((j + 1) * n_bits);
+            packed_data |= (block_id << shift);
+        }
+        
+        serializer->writeLong(packed_data);
+    }
 }
 
 Chunk::Chunk(int32_t x, int32_t z) : x(x), z(z) {}
@@ -103,9 +100,9 @@ void ChunkGenerator::generateBaseStructure(Chunk &chunk,
                     float height = heights[i_x][i_z];
 
                     if (height > absolute_y) {
-                        chunk_smol.setBlock(i_y, i_z, 15 - i_x, Block(BlockType::Stone));
+                        chunk_smol.setBlock(i_y, i_z, 15 - i_x, make_block("minecraft:stone"));
                     } else {
-                        chunk_smol.setBlock(i_y, i_z, 15 - i_x, Block(BlockType::Air));
+                        chunk_smol.setBlock(i_y, i_z, 15 - i_x, make_block("minecraft:air"));
                     }
                 }
             }
