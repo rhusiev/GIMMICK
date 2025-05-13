@@ -123,7 +123,7 @@ void ChunkGenerator::generateBaseStructure(Chunk &chunk,
 
                     if (height > absolute_y) {
                         chunk_smol.setBlock(i_y, i_z, 15 - i_x,
-                                            make_block<make_kv(key_snowy, val_true)>("minecraft:grass"));
+                                            make_block<make_kv(key_snowy, val_true)>("minecraft:grass_block"));
                     } else {
                         chunk_smol.setBlock(i_y, i_z, 15 - i_x,
                                             make_block("minecraft:air"));

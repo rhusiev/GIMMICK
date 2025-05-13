@@ -70,7 +70,7 @@ constexpr auto make_block(const char (&blockName)[name_len]) {
         "All propertyArgs must be KeyValue<K,V>");
     constexpr size_t property_size =
         compute_size(propertyArgs...);
-    constexpr size_t N = name_len + 2 + property_size; // length -> string
+    constexpr size_t N = name_len + 1 + property_size; // length -> string
 
     OutputBuffer buffer(N);
     NBTSerializer serializer(&buffer);
