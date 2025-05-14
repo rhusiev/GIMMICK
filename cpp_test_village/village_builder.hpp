@@ -2,6 +2,7 @@
 #define VILLAGE_BUILDER_HPP
 
 #include "village_objects.hpp"
+#include <random>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -82,8 +83,17 @@ struct VillageLayout {
     VillageGrid grid;
 };
 
-VillageLayout generate_village_layout(const std::set<House> &houses,
-                                      int path_width = 3,
-                                      int max_astar_steps = 10000);
+std::set<House>
+generate_village_houses(int max_num_houses, const Coord &initial_start_coord,
+                        const std::vector<Coord> &possible_house_sizes,
+                        const IntGrid &terrain_map, double step_dist_mean,
+                        std::mt19937 &gen, // Pass generator by reference
+                        double initial_probability = 1.0,
+                        double probability_base_decay = 0.99,
+                        double probability_exponent_decay = 0.08);
+
+VillageLayout generate_village_paths(const std::set<House> &houses_set,
+                                     int path_width = 3,
+                                     int max_astar_steps = 10000);
 
 #endif // VILLAGE_BUILDER_HPP
