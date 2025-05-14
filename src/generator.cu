@@ -87,13 +87,8 @@ ChunkGenerator::generateSmolChunk(ChunkSmol *chunk_smol, int32_t seed,
                     chunk_smol->setBlock(local_y, local_z, 15 - local_x,
                                          make_block("minecraft:stone"));
                 } else {
-                    if (absolute_y < 64 && flat.height < 70) {
-                        chunk_smol->setBlock(local_y, local_z, 15 - local_x,
-                                             make_block("minecraft:water"));
-                    } else {
-                        chunk_smol->setBlock(local_y, local_z, 15 - local_x,
-                                             make_block("minecraft:air"));
-                    }
+                    chunk_smol->setBlock(local_y, local_z, 15 - local_x,
+                                         make_block("minecraft:air"));
                 }
             }
         }
@@ -108,7 +103,8 @@ __device__ void ChunkGenerator::replaceSurface(ChunkWrapper &chunk,
         for (int32_t local_x = 0; local_x < 16; local_x++) {
             FlatInfo info = chunk.get_flat_info(local_x, local_z);
 
-            float starting_height = info.height + 15 + 64; // because local
+            float starting_height = std::max<float>(info.height + 15 + 64,
+                                                    64 + 64); // because local
 
             bool cold = info.temperature < 0.4f;
             bool hit_surface = false;
@@ -116,6 +112,16 @@ __device__ void ChunkGenerator::replaceSurface(ChunkWrapper &chunk,
 
             for (int32_t local_y = starting_height; local_y > 32; local_y--) {
                 int32_t absolute_y = local_y - 64;
+
+                if (!surface_heights[local_x][local_z] && absolute_y < 65 &&
+                    info.continentalness < 0.75) {
+                    if (chunk.isSameBlock(local_y, local_z, 15 - local_x,
+                                          make_block("minecraft:air"))) {
+                        chunk.setBlock(local_y, local_z, 15 - local_x,
+                                       make_block("minecraft:water"));
+                    }
+                }
+
                 bool air_above =
                     chunk.isSameBlock(local_y + 1, local_z, 15 - local_x,
                                       make_block("minecraft:air"));
@@ -134,18 +140,27 @@ __device__ void ChunkGenerator::replaceSurface(ChunkWrapper &chunk,
 
                 if (chunk.isSameBlock(local_y, local_z, 15 - local_x,
                                       make_block("minecraft:stone"))) {
+                    if (!surface_heights[local_x][local_z]) {
+                        surface_heights[local_x][local_z] = local_y;
+                    }
+
                     if (air_above && cold) {
                         chunk.setBlock(local_y + 1, local_z, 15 - local_x,
                                        make_block("minecraft:snow"));
                     }
 
                     if (info.continentalness < 0.5 || water_above) {
+                        if (absolute_y < info.height - 5) {
+                            break;
+                        }
+
                         chunk.setBlock(local_y, local_z, 15 - local_x,
                                        make_block("minecraft:sand"));
 
                         if (info.continentalness < 0.4 &&
                             info.temperature > 0.5f && water_above &&
-                            info.vegetation > 0.6 && !hit_surface) {
+                            info.vegetation > 0.6 &&
+                            surface_heights[local_x][local_z] == local_y) {
                             //  Should grow kelp
                             float max_height =
                                 std::min<float>((64.f - absolute_y) / 20.f, 1) *
@@ -201,11 +216,6 @@ __device__ void ChunkGenerator::replaceSurface(ChunkWrapper &chunk,
                     } else {
                         break;
                     }
-
-                    if (!hit_surface) {
-                        surface_heights[local_x][local_z] = local_y;
-                    }
-                    hit_surface = true;
                 }
             }
         }
@@ -217,7 +227,6 @@ __device__ void ChunkGenerator::replaceSurface(ChunkWrapper &chunk,
             float starting_height = info.height + 15 + 64; // because local
 
             bool cold = info.temperature < 0.4f;
-            bool hit_surface = false;
             int32_t surface_height = surface_heights[local_x][local_z];
 
             // Generate a tree
