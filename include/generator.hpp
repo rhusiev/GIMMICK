@@ -25,8 +25,13 @@ class ChunkWrapper {
     const FlatInfo *flat_info;
 
   public:
-    __device__ ChunkWrapper(ChunkSmol *smols, const FlatInfo *flat_info)
-        : smols(smols), flat_info(flat_info) {};
+    int32_t global_x;
+    int32_t global_z;
+
+    __device__ ChunkWrapper(ChunkSmol *smols, const FlatInfo *flat_info,
+                            int32_t global_x, int32_t global_z)
+        : smols(smols), flat_info(flat_info), global_x(global_x),
+          global_z(global_z) {};
 
     template <typename Block>
     __device__ void setBlock(int32_t y, int32_t z, int32_t x,

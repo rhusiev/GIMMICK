@@ -108,7 +108,7 @@ __device__ void ChunkGenerator::replaceSurface(ChunkWrapper &chunk,
 
             bool cold = info.temperature < 0.4f;
             bool hit_surface = false;
-            int32_t surface_height = 0;
+            surface_heights[local_x][local_z] = 0;
 
             for (int32_t local_y = starting_height; local_y > 32; local_y--) {
                 int32_t absolute_y = local_y - 64;
@@ -375,8 +375,16 @@ std::vector<Chunk> ChunkGenerator::generate_all(int32_t region_x,
                      [seed = seed, region_x, region_z, all_chunks,
                       all_flats] __device__(const uint32_t &cell_id) {
                          ChunkSmol *raw_chunks = all_chunks[cell_id];
+
+                         int32_t cell_id_x = cell_id / 32;
+                         int32_t cell_id_z = cell_id % 32;
+
+                         int32_t chunk_x = (region_x * 32 + cell_id_x) * 16;
+                         int32_t chunk_z = (region_z * 32 + cell_id_z) * 16;
+
                          ChunkWrapper wrapper(raw_chunks,
-                                              all_flats + cell_id * 16 * 16);
+                                              all_flats + cell_id * 16 * 16,
+                                              chunk_x, chunk_z);
                          replaceSurface(wrapper, seed);
                      });
 
