@@ -1,9 +1,8 @@
+#include "pathfinding.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <queue>
-#include <unordered_map>
-#include "pathfinding.hpp"
 
 int heuristic(const Coord &a, const Coord &b) {
     return std::abs(a.x - b.x) + std::abs(a.y - b.y);
@@ -21,44 +20,39 @@ struct AStarNode {
         if (g_score != other.g_score) {
             return g_score > other.g_score;
         }
-        // Final consistent tie-breaker
         return pos > other.pos;
     }
 };
 
-std::optional<std::vector<Coord>>
-astar(const Coord &start, const Coord &goal,
-      const std::vector<std::vector<bool>> &blocked, int max_steps) {
-    if (blocked.empty() || blocked[0].empty()) {
+std::optional<std::vector<Coord>> astar(const Coord &start, const Coord &goal,
+                                        const BoolGrid &blocked,
+                                        int max_steps) {
+
+    if (blocked.empty()) {
         return std::nullopt;
     }
-    size_t grid_height = blocked.size();
-    size_t grid_width = blocked[0].size();
+    int grid_height = blocked.height;
+    int grid_width = blocked.width;
 
-    if (!(start.x >= 0 && static_cast<size_t>(start.x) < grid_width &&
-          start.y >= 0 && static_cast<size_t>(start.y) < grid_height &&
-          !blocked[static_cast<size_t>(start.y)]
-                  [static_cast<size_t>(start.x)])) {
+    if (!blocked.is_valid(start.y, start.x) || blocked(start.y, start.x)) {
         return std::nullopt;
     }
-
-    if (!(goal.x >= 0 && static_cast<size_t>(goal.x) < grid_width &&
-          goal.y >= 0 && static_cast<size_t>(goal.y) < grid_height)) {
-        return std::nullopt; // Goal is out of bounds
+    if (!blocked.is_valid(goal.y, goal.x)) {
+        return std::nullopt;
     }
 
     std::priority_queue<AStarNode, std::vector<AStarNode>,
                         std::greater<AStarNode>>
         open_set;
-    std::unordered_map<Coord, int, CoordHash> g_scores;
-    std::unordered_map<Coord, Coord, CoordHash> came_from;
 
-    g_scores[start] = 0;
+    Grid1D<int> g_scores(grid_width, grid_height,
+                         std::numeric_limits<int>::max());
+    Grid1D<Coord> came_from(grid_width, grid_height, Coord{-1, -1});
+
+    g_scores(start.y, start.x) = 0;
     open_set.push({heuristic(start, goal), 0, start});
 
     int steps = 0;
-    const int infinity = std::numeric_limits<int>::max();
-
     static const int dx[] = {1, -1, 0, 0};
     static const int dy[] = {0, 0, 1, -1};
 
@@ -72,17 +66,19 @@ astar(const Coord &start, const Coord &goal,
             Coord path_curr = goal;
             while (path_curr != start) {
                 path.push_back(path_curr);
-                path_curr = came_from.at(path_curr);
+                path_curr = came_from(path_curr.y, path_curr.x);
+                if (path_curr.x == -1 && path_curr.y == -1 &&
+                    path_curr != start) {
+                    return std::nullopt;
+                }
             }
             path.push_back(start);
             std::reverse(path.begin(), path.end());
             return path;
         }
 
-        // If this node was reached by a shorter path already processed, skip
-        auto it_g_current = g_scores.find(current_pos);
-        if (it_g_current == g_scores.end() ||
-            current_node.g_score > it_g_current->second) {
+        // If a shorter path already found
+        if (current_node.g_score > g_scores(current_pos.y, current_pos.x)) {
             continue;
         }
 
@@ -91,28 +87,18 @@ astar(const Coord &start, const Coord &goal,
         for (int i = 0; i < 4; ++i) {
             Coord neighbor_pos(current_pos.x + dx[i], current_pos.y + dy[i]);
 
-            if (neighbor_pos.x < 0 ||
-                static_cast<size_t>(neighbor_pos.x) >= grid_width ||
-                neighbor_pos.y < 0 ||
-                static_cast<size_t>(neighbor_pos.y) >= grid_height) {
+            if (!blocked.is_valid(neighbor_pos.y, neighbor_pos.x)) {
+                continue;
+            }
+            if (blocked(neighbor_pos.y, neighbor_pos.x)) {
                 continue;
             }
 
-            if (blocked[static_cast<size_t>(neighbor_pos.y)]
-                       [static_cast<size_t>(neighbor_pos.x)]) {
-                continue;
-            }
+            int tentative_g_score = g_scores(current_pos.y, current_pos.x) + 1;
 
-            int tentative_g_score = g_scores[current_pos] + 1;
-
-            auto it_g_neighbor = g_scores.find(neighbor_pos);
-            int neighbor_g_val = (it_g_neighbor == g_scores.end())
-                                     ? infinity
-                                     : it_g_neighbor->second;
-
-            if (tentative_g_score < neighbor_g_val) {
-                came_from[neighbor_pos] = current_pos;
-                g_scores[neighbor_pos] = tentative_g_score;
+            if (tentative_g_score < g_scores(neighbor_pos.y, neighbor_pos.x)) {
+                came_from(neighbor_pos.y, neighbor_pos.x) = current_pos;
+                g_scores(neighbor_pos.y, neighbor_pos.x) = tentative_g_score;
                 int f_score = tentative_g_score + heuristic(neighbor_pos, goal);
                 open_set.push({f_score, tentative_g_score, neighbor_pos});
             }

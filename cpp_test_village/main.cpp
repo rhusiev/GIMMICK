@@ -7,15 +7,15 @@
 #include <set>
 #include <vector>
 
-int calculate_max_terrain_height_for_house(
-    const Coord &c1, const Coord &c2,
-    const std::vector<std::vector<int>> &heights_map) {
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
-    if (heights_map.empty() || heights_map[0].empty()) {
+int calculate_max_terrain_height_for_house(const Coord &c1, const Coord &c2,
+                                           const IntGrid &heights_map) {
+    if (heights_map.empty()) {
         return 0;
     }
-    size_t map_rows = heights_map.size();
-    size_t map_cols = heights_map[0].size();
 
     int x_min_world = std::min(c1.x, c2.x);
     int x_max_world = std::max(c1.x, c2.x);
@@ -27,12 +27,8 @@ int calculate_max_terrain_height_for_house(
 
     for (int y_world = y_min_world; y_world <= y_max_world; ++y_world) {
         for (int x_world = x_min_world; x_world <= x_max_world; ++x_world) {
-            if (x_world >= 0 && static_cast<size_t>(x_world) < map_cols &&
-                y_world >= 0 && static_cast<size_t>(y_world) < map_rows) {
-
-                int current_terrain_height =
-                    heights_map[static_cast<size_t>(y_world)]
-                               [static_cast<size_t>(x_world)];
+            if (heights_map.is_valid(y_world, x_world)) {
+                int current_terrain_height = heights_map(y_world, x_world);
 
                 if (!found_valid_point_on_map) {
                     max_h = current_terrain_height;
@@ -43,10 +39,7 @@ int calculate_max_terrain_height_for_house(
             }
         }
     }
-
-    if (!found_valid_point_on_map) {
-        return 0;
-    }
+    // If house is entirely outside the map
     return max_h;
 }
 
@@ -55,14 +48,15 @@ void print_grid(const VillageGrid &grid) {
         std::cout << "Grid is empty." << std::endl;
         return;
     }
-    for (const auto &row : grid) {
-        for (int cell : row) {
-            char c = ' ';
-            if (cell == 1)
-                c = 'H';
-            else if (cell == 2)
-                c = '#';
-            std::cout << c;
+    for (int r = 0; r < grid.height; ++r) {
+        for (int c = 0; c < grid.width; ++c) {
+            char ch = ' ';
+            int cell_value = grid(r, c);
+            if (cell_value == 1)
+                ch = 'H';
+            else if (cell_value == 2)
+                ch = '#';
+            std::cout << ch;
         }
         std::cout << std::endl;
     }
@@ -72,26 +66,24 @@ int main() {
     std::random_device rd;
     std::mt19937 gen(rd());
 
-    const int terrain_map_width = 500;
-    const int terrain_map_height = 500;
-    std::vector<std::vector<int>> terrain_heights_map(
-        terrain_map_height, std::vector<int>(terrain_map_width));
+    const int terrain_map_width = 50;
+    const int terrain_map_height = 50;
+    IntGrid terrain_heights_map(terrain_map_width, terrain_map_height);
 
     for (int y = 0; y < terrain_map_height; ++y) {
         for (int x = 0; x < terrain_map_width; ++x) {
-            terrain_heights_map[y][x] = (x / 20 + y / 30) % 15;
+            terrain_heights_map(y, x) = (x / 10 + y / 15) % 5;
         }
     }
 
     double probability = 1.0;
-    Coord start_coord(250, 250);
-    std::vector<Coord> sizes = {Coord(10, 15), Coord(20, 20), Coord(16, 20),
-                                Coord(25, 38)};
+    Coord start_coord(terrain_map_width / 2, terrain_map_height / 2);
+    std::vector<Coord> sizes = {Coord(15, 40), Coord(20, 20), Coord(20, 36),
+                                Coord(8, 16)};
 
     std::uniform_int_distribution<> bool_dist(0, 1);
     std::uniform_int_distribution<size_t> size_choice_dist(0, sizes.size() - 1);
 
-    // Initial house
     Coord initial_size = sizes[size_choice_dist(gen)];
     bool initial_orientation = static_cast<bool>(bool_dist(gen));
     int initial_house_terrain_height = calculate_max_terrain_height_for_house(
@@ -108,7 +100,7 @@ int main() {
     std::exponential_distribution<double> step_dist(1.0 / 40.0);
     std::uniform_real_distribution<double> angle_dist(0.0, 2.0 * M_PI);
 
-    int max_houses = 50;
+    int max_houses = 40;
     int houses_generated_count = 1;
 
     while (std::uniform_real_distribution<double>(0.0, 1.0)(gen) <
@@ -150,7 +142,7 @@ int main() {
             auto insert_result = houses_set.insert(new_house);
             if (insert_result.second) {
                 houses_vec.push_back(new_house);
-                probability *= std::pow(0.995, 0.07);
+                probability *= std::pow(0.99, 0.08);
                 houses_generated_count++;
             }
         }
@@ -164,8 +156,8 @@ int main() {
 
     VillageLayout layout = generate_village_layout(houses_set, 3, 10000);
 
-    std::cout << "Village grid dimensions: " << layout.max_x << "x"
-              << layout.max_y << std::endl;
+    std::cout << "Village grid dimensions: " << layout.grid.width << "x"
+              << layout.grid.height << std::endl;
     print_grid(layout.grid);
 
     return 0;

@@ -1,17 +1,13 @@
 #include "village_objects.hpp"
-#include <algorithm>
-#include <vector>
+#include <algorithm> // For std::min, std::max
+#include <vector>    // For std::vector in is_valid
 
 RectBounds get_rect_bounds(const House &h) {
-    int x_coords[] = {h.corner1.x, h.corner2.x};
-    int y_coords[] = {h.corner1.y, h.corner2.y};
-    std::sort(std::begin(x_coords), std::end(x_coords));
-    std::sort(std::begin(y_coords), std::end(y_coords));
-    return {x_coords[0], x_coords[1], y_coords[0], y_coords[1]};
+    return {
+        std::min(h.corner1.x, h.corner2.x), std::max(h.corner1.x, h.corner2.x),
+        std::min(h.corner1.y, h.corner2.y), std::max(h.corner1.y, h.corner2.y)};
 }
 
-// Check if two houses intersect, considering a margin
-// The constants +2 and -3 define a specific kind of margin/gap.
 bool intersects(const House &a, const House &b) {
     RectBounds bounds_a = get_rect_bounds(a);
     RectBounds bounds_b = get_rect_bounds(b);
@@ -24,7 +20,6 @@ bool intersects(const House &a, const House &b) {
     return !(no_x_intersect || no_y_intersect);
 }
 
-// Check if a new house is valid (doesn't intersect with existing houses)
 bool is_valid(const House &new_house,
               const std::vector<House> &existing_houses) {
     for (const auto &h : existing_houses) {
@@ -35,12 +30,14 @@ bool is_valid(const House &new_house,
     return true;
 }
 
-// Determine the door's coordinate based on house corners and orientation
 Coord get_door(const House &h) {
     RectBounds bounds = get_rect_bounds(h);
     int cx, cy;
 
     if (!h.orientation) {
+        // If corner1.x is one of the vertical extent of the house (bounds.x0 or
+        // bounds.x1) then the wall is vertical, so door is at (corner1.x,
+        // midpoint_y)
         if (h.corner1.x == bounds.x0 || h.corner1.x == bounds.x1) {
             cx = h.corner1.x;
             cy = (bounds.y0 + bounds.y1) / 2;
