@@ -14,9 +14,8 @@
 
 __device__ float noise(int32_t seed, int32_t x, int32_t z, float frequency,
                        int32_t octaves) {
-    return cudaNoise::repeaterSimplex(
-        make_float3(x * frequency, 0.f, z * frequency), 1.0f, seed, octaves,
-        2.0f, 0.5f);
+    return cudaNoise::repeaterSimplex(make_float3(x, 0.f, z), frequency, seed,
+                                      octaves, 2.0f, 0.5f);
 }
 
 __device__ float noise(int32_t seed, int32_t x, int32_t y, int32_t z,
@@ -45,17 +44,23 @@ __device__ bool cave_noise(int32_t seed, int32_t x, int32_t y, int32_t z) {
 // All of the 2d noises should be computed here
 __device__ FlatInfo ChunkGenerator::get_flat_info(int32_t seed, int32_t x,
                                                   int32_t z) {
-    auto shatter = std::clamp<float>(
-        noise(seed + 1, x, z, 0.005f, 2) * 0.5f + 0.5f, 0.f, 1.f);
-    auto height = std::clamp<float>(
-        (noise(seed, x, z, 0.01f, 3) + 1) * (16 + 48 * shatter) + 32, 0, 384);
+    auto continentalness =
+        std::clamp<float>((noise(seed, x, z, 0.005f, 2) + 1) * 0.5f, 0, 1);
+
+    auto shatter =
+        std::clamp<float>(noise(seed + 1, x, z, 0.005f, 2) * 0.5f + 0.5f, 0.f,
+                          1.f) *
+        continentalness * std::clamp<float>(continentalness * 2 - 0.5, 0, 1);
+    auto heightNoise = (noise(seed, x, z, 0.01f, 3) + 2.f + shatter) / 4.f;
+    auto height = heightNoise * continentalness * 64.f + 48.f;
+
     auto temperature = std::clamp<float>(
-        noise(seed + 2, x, z, 0.005f, 5) * 0.5f + 0.5f, 0.f, 1.f);
+        noise(seed + 2, x, z, 0.005, 4) * 0.5f + 0.5f, 0.f, 1.f);
     auto vegetation = std::clamp<float>(noise(seed + 3, x, z, 0.25f, 1) * 0.5f +
                                             0.5f + shatter * 0.1f,
                                         0.f, 1.f);
 
-    return FlatInfo{height, shatter, temperature, vegetation};
+    return FlatInfo{height, shatter, temperature, vegetation, continentalness};
 }
 
 // And here we use them
@@ -68,7 +73,7 @@ ChunkGenerator::generateSmolChunk(ChunkSmol *chunk_smol, int32_t seed,
         // Process all 4096 blocks in this subchunk
         for (uint32_t local_z = 0; local_z < 16; local_z++) {
             for (uint32_t local_x = 0; local_x < 16; local_x++) {
-                int32_t absolute_y = local_y + chunk_y;
+                int32_t absolute_y = local_y + chunk_y - 64;
                 FlatInfo flat = flat_info[local_z * 16 + local_x];
                 VolumetricInfo volumetric =
                     volumetric_info[local_y * 16 * 16 + local_z * 16 + local_x];
@@ -82,8 +87,13 @@ ChunkGenerator::generateSmolChunk(ChunkSmol *chunk_smol, int32_t seed,
                     chunk_smol->setBlock(local_y, local_z, 15 - local_x,
                                          make_block("minecraft:stone"));
                 } else {
-                    chunk_smol->setBlock(local_y, local_z, 15 - local_x,
-                                         make_block("minecraft:air"));
+                    if (absolute_y < 64 && flat.height < 70) {
+                        chunk_smol->setBlock(local_y, local_z, 15 - local_x,
+                                             make_block("minecraft:water"));
+                    } else {
+                        chunk_smol->setBlock(local_y, local_z, 15 - local_x,
+                                             make_block("minecraft:air"));
+                    }
                 }
             }
         }
@@ -92,26 +102,90 @@ ChunkGenerator::generateSmolChunk(ChunkSmol *chunk_smol, int32_t seed,
 
 __device__ void ChunkGenerator::replaceSurface(ChunkWrapper &chunk,
                                                int32_t seed) {
+    int32_t surface_heights[16][16];
+
     for (int32_t local_z = 0; local_z < 16; local_z++) {
         for (int32_t local_x = 0; local_x < 16; local_x++) {
             FlatInfo info = chunk.get_flat_info(local_x, local_z);
-            float starting_height = info.height + 15;
+
+            float starting_height = info.height + 15 + 64; // because local
+
+            bool cold = info.temperature < 0.4f;
+            bool hit_surface = false;
+            int32_t surface_height = 0;
 
             for (int32_t local_y = starting_height; local_y > 32; local_y--) {
+                int32_t absolute_y = local_y - 64;
+                bool air_above =
+                    chunk.isSameBlock(local_y + 1, local_z, 15 - local_x,
+                                      make_block("minecraft:air"));
+                bool water_above =
+                    chunk.isSameBlock(local_y + 1, local_z, 15 - local_x,
+                                      make_block("minecraft:water"));
+
+                if (cold && air_above &&
+                    info.vegetation > (info.temperature - 0.1f) &&
+                    chunk.isSameBlock(local_y, local_z, 15 - local_x,
+                                      make_block("minecraft:water"))) {
+                    chunk.setBlock(local_y, local_z, 15 - local_x,
+                                   make_block("minecraft:ice"));
+                    continue;
+                }
+
                 if (chunk.isSameBlock(local_y, local_z, 15 - local_x,
                                       make_block("minecraft:stone"))) {
-                    if (info.temperature < 0.4f) {
-                        chunk.setBlock(local_y, local_z, 15 - local_x,
-                                       make_block<MAKE_KV("snowy", "true")>(
-                                           "minecraft:grass_block"));
-
+                    if (air_above && cold) {
                         chunk.setBlock(local_y + 1, local_z, 15 - local_x,
                                        make_block("minecraft:snow"));
-                    } else {
+                    }
+
+                    if (info.continentalness < 0.5 || water_above) {
+                        chunk.setBlock(local_y, local_z, 15 - local_x,
+                                       make_block("minecraft:sand"));
+
+                        if (info.continentalness < 0.4 &&
+                            info.temperature > 0.5f && water_above &&
+                            info.vegetation > 0.6 && !hit_surface) {
+                            //  Should grow kelp
+                            float max_height =
+                                std::min<float>((64.f - absolute_y) / 20.f, 1) *
+                                15.f;
+                            float height_coef = std::max<float>(
+                                (info.vegetation - 0.6) * 10.f, 1);
+                            float height = height_coef * max_height;
+                            int32_t kelp_top = height + local_y;
+
+                            for (int32_t kelp_y = local_y + 1;
+                                 kelp_y < kelp_top; kelp_y++) {
+                                if (!chunk.isSameBlock(
+                                        kelp_y, local_z, 15 - local_x,
+                                        make_block("minecraft:water")))
+                                    break;
+
+                                if (kelp_y == kelp_top - 1) {
+                                    chunk.setBlock(
+                                        kelp_y, local_z, 15 - local_x,
+                                        make_block("minecraft:kelp"));
+                                } else {
+                                    chunk.setBlock(
+                                        kelp_y, local_z, 15 - local_x,
+                                        make_block("minecraft:kelp_plant"));
+                                }
+                            }
+                        }
+
+                    } else if (air_above) {
+                        if (cold) {
+                            chunk.setBlock(local_y, local_z, 15 - local_x,
+                                           make_block<MAKE_KV("snowy", "true")>(
+                                               "minecraft:grass_block"));
+                            continue;
+                        }
+
                         chunk.setBlock(local_y, local_z, 15 - local_x,
                                        make_block("minecraft:grass_block"));
 
-                        if (info.vegetation > 0.7) {
+                        if (info.vegetation > 0.65) {
                             chunk.setBlock(local_y + 1, local_z, 15 - local_x,
                                            make_block("minecraft:tall_grass"));
                             chunk.setBlock(local_y + 2, local_z, 15 - local_x,
@@ -121,8 +195,57 @@ __device__ void ChunkGenerator::replaceSurface(ChunkWrapper &chunk,
                             chunk.setBlock(local_y + 1, local_z, 15 - local_x,
                                            make_block("minecraft:short_grass"));
                         }
+                    } else if (absolute_y > info.height - 5) {
+                        chunk.setBlock(local_y, local_z, 15 - local_x,
+                                       make_block("minecraft:dirt"));
+                    } else {
+                        break;
                     }
-                    break;
+
+                    if (!hit_surface) {
+                        surface_heights[local_x][local_z] = local_y;
+                    }
+                    hit_surface = true;
+                }
+            }
+        }
+    }
+    for (int32_t local_z = 3; local_z < 13; local_z++) {
+        for (int32_t local_x = 3; local_x < 13; local_x++) {
+            FlatInfo info = chunk.get_flat_info(local_x, local_z);
+
+            float starting_height = info.height + 15 + 64; // because local
+
+            bool cold = info.temperature < 0.4f;
+            bool hit_surface = false;
+            int32_t surface_height = surface_heights[local_x][local_z];
+
+            // Generate a tree
+            if (surface_height > 130 && info.continentalness > 0.55 &&
+                info.continentalness < 0.9 && info.vegetation > 0.675) {
+
+                float tree_size =
+                    5 + 2. * std::min<float>((info.vegetation - 0.675) / 0.025f,
+                                             1.f);
+
+                // Leaves:
+                for (int y = 0; y < 4; y++) {
+                    for (int z = -2; z < 3; z++) {
+                        for (int x = -2; x < 3; x++) {
+                            if (z * z + x * x + y * y + y > tree_size)
+                                continue;
+
+                            chunk.setBlock(surface_height + y + 3, local_z + z,
+                                           15 - local_x + x,
+                                           make_block("minecraft:oak_leaves"));
+                        }
+                    }
+                }
+
+                // Trunk:
+                for (int y = 1; y < 4; y++) {
+                    chunk.setBlock(surface_height + y, local_z, 15 - local_x,
+                                   make_block("minecraft:oak_log"));
                 }
             }
         }

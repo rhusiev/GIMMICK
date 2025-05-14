@@ -10,6 +10,7 @@ class FlatInfo {
     float shatter;
     float temperature;
     float vegetation;
+    float continentalness;
 };
 
 class VolumetricInfo {
