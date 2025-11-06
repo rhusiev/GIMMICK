@@ -9,8 +9,8 @@
 #include <thread>
 #include <thrust/device_vector.h>
 
-void sample_write_chunk(int region_x, int region_z) {
-    ChunkGenerator generator(0);
+void sample_write_chunk(int region_x, int region_z, int seed) {
+    ChunkGenerator generator(seed);
 
     McAnvilWriter writer;
     auto buffers = writer.allBuffers();
@@ -33,12 +33,18 @@ void sample_write_chunk(int region_x, int region_z) {
     }
 }
 
-int main() {
+int main(int argc, char** argv) {
     constexpr auto regions = 1;
+    int seed;
+    if (argc == 1) {
+        seed = 0;
+    } else {
+        seed = atoi(argv[1]);
+    }
 
     for (auto x = 0; x < regions; x++) {
         for (auto z = 0; z < regions; z++) {
-            sample_write_chunk(x, z);
+            sample_write_chunk(x, z, seed);
         }
     }
 

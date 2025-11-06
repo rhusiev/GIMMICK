@@ -1,0 +1,14 @@
+Specs:
+- CPU: Intel Core i5-9300H
+- Memory: 32 GiB of RAM (31.1 GiB usable)
+- GPU: NVIDIA GeForce GTX 1050
+Data:
+- Minecraft: 5.977 s/region
+- Gimmick: 2.363 s/region
+2.5x speedup
+
+Spec with NVIDIA RTX 3080
+Data:
+- Non-CUDA: 26.6s
+- CUDA: 0.8s
+33x speedup

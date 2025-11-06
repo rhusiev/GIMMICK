@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
 project(gimmick C CXX)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if (NOT DEFINED CMAKE_CUDA_COMPILER)
     set(CMAKE_CUDA_COMPILER "/usr/bin/clang++")
 endif()
-set(CMAKE_CUDA_ARCHITECTURES all)
+set(CMAKE_CUDA_ARCHITECTURES 61)
 enable_language(CUDA)
 
 add_executable(${PROJECT_NAME})
@@ -37,7 +38,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         CXX_STANDARD_REQUIRED ON
         CUDA_STANDARD 23
         CUDA_STANDARD_REQUIRED ON
-        CUDA_ARCHITECTURES all
+        CUDA_ARCHITECTURES 61
         COMPILE_FLAGS "-xcuda --cuda-path=/usr/local/cuda"
     )
 else()
@@ -46,6 +47,6 @@ else()
         CXX_STANDARD_REQUIRED ON
         CUDA_STANDARD 23
         CUDA_STANDARD_REQUIRED ON
-        CUDA_ARCHITECTURES all
+        CUDA_ARCHITECTURES 61
     )
 endif()
